@@ -1,22 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2E3140"/>
-      <stop offset="1" stop-color="#14161F"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2E3140" />
+      <stop offset="1" stop-color="#14161F" />
     </linearGradient>
-  </defs>
-  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
-  <rect x="8.5" y="8.5" width="239" height="239" rx="55.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.10"/>
-  <g>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FF5E57" opacity="0.92" transform="rotate(0 128 128)"/>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FF9F1A" opacity="0.92" transform="rotate(45 128 128)"/>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FFD60A" opacity="0.92" transform="rotate(90 128 128)"/>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#7BD42B" opacity="0.92" transform="rotate(135 128 128)"/>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#1DD3B0" opacity="0.92" transform="rotate(180 128 128)"/>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#2F9BFF" opacity="0.92" transform="rotate(225 128 128)"/>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#7B61FF" opacity="0.92" transform="rotate(270 128 128)"/>
-    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FF5CAA" opacity="0.92" transform="rotate(315 128 128)"/>
+  <linearGradient id="rimX" x1="0" y1="0" x2="1" y2="1"><stop offset="0.0" stop-color="#f59e0b" /><stop offset="0.5" stop-color="#ec4899" /><stop offset="1.0" stop-color="#8b5cf6" /></linearGradient></defs><rect x="10" y="10" width="236" height="236" rx="58" fill="#151827" /><g transform="translate(10.239999999999995 10.239999999999995) scale(0.92)"><g>
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FF5E57" opacity="0.92" transform="rotate(0 128 128)" />
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FF9F1A" opacity="0.92" transform="rotate(45 128 128)" />
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FFD60A" opacity="0.92" transform="rotate(90 128 128)" />
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#7BD42B" opacity="0.92" transform="rotate(135 128 128)" />
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#1DD3B0" opacity="0.92" transform="rotate(180 128 128)" />
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#2F9BFF" opacity="0.92" transform="rotate(225 128 128)" />
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#7B61FF" opacity="0.92" transform="rotate(270 128 128)" />
+    <ellipse cx="128" cy="80" rx="31" ry="50" fill="#FF5CAA" opacity="0.92" transform="rotate(315 128 128)" />
   </g>
-  <circle cx="128" cy="128" r="12" fill="#14161F" opacity="0.85"/>
-</svg>
+  <circle cx="128" cy="128" r="12" fill="#14161F" opacity="0.85" />
+</g></svg>
