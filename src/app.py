@@ -131,6 +131,8 @@ def bg(fn, cb):
         try:
             res = (fn(), None)
         except Exception as e:  # noqa: BLE001
+            # pełny traceback (z __cause__/__context__) do debug.log - w oknie widać tylko krótki komunikat
+            log.warning("bg %s failed", getattr(fn, "__name__", fn), exc_info=True)
             _auth_check(e)
             res = (None, e)
 
@@ -1489,6 +1491,12 @@ class SettingsDialog(Gtk.Window):
                        xalign=0)
         pv.add_css_class("dim-label")
         grid.attach(pv, 1, 8, 1, 1)
+        grid.attach(Gtk.Label(label=tr("Konto iCloud"), xalign=0), 0, 9, 1, 1)
+        logout = Gtk.Button(label=tr("Wyloguj"), halign=Gtk.Align.START)
+        logout.add_css_class("destructive-action")
+        logout.set_tooltip_text(tr("Usuwa zapisaną sesję i hasło z tego komputera"))
+        logout.connect("clicked", self._on_logout)
+        grid.attach(logout, 1, 9, 1, 1)
         self.set_child(grid)
         self._refresh_size()
 
@@ -1507,6 +1515,10 @@ class SettingsDialog(Gtk.Window):
             self.win.toast(tr("Pamięć podręczna wyczyszczona") if not err
                            else tr("Nie udało się wyczyścić: {0}").format(err))
         bg(clear_cache, done)
+
+    def _on_logout(self, _b):
+        self.close()
+        self.win.logout()
 
     def _on_glass(self, scale):
         v = int(scale.get_value())
@@ -2227,7 +2239,13 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _albums_loaded(self, albums, err):
         if err:
-            self.count.set_text(tr("Błąd albumów: {0}").format(err))
+            msg = tr("Błąd albumów: {0}").format(f"{type(err).__name__}: {err}")
+            if "service not available" in str(err).lower() or "NotActivated" in type(err).__name__:
+                msg += tr(" - Apple nie udostępnia Zdjęć tej sesji. Włącz „Dostęp do danych iCloud "
+                          "w sieci” na iPhonie (przy Zaawansowanej ochronie danych), otwórz raz "
+                          "icloud.com/photos w przeglądarce, potem Ustawienia → Wyloguj i zaloguj się ponownie.")
+            self.count.set_text(msg)
+            self.count.set_tooltip_text(msg)
             return
         by_name = dict(albums)
         cover_rows = []
@@ -3065,6 +3083,30 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._probing = True
         bg(self.icloud.probe, done)
+
+    def logout(self):
+        """Wylogowanie: zapomnij sesję (ciasteczka pyicloud) i hasło z keyringu, wróć do logowania.
+        Apple ID zostaje wpisane w pole, pamięć podręczna miniatur zostaje."""
+        aid = load_cfg().get("apple_id")
+        log.info("wylogowanie")
+        if keyring and aid:
+            for svc in (KEYRING_SERVICE, OLD_KEYRING_SERVICE):
+                try:
+                    keyring.delete_password(svc, aid)
+                except Exception:  # noqa: BLE001
+                    pass
+        sess = CONFIG_DIR / "session"
+        if sess.is_dir():
+            for f in sess.iterdir():
+                try:
+                    shutil.rmtree(f) if f.is_dir() else f.unlink()
+                except OSError:
+                    pass
+        self.icloud.api = None
+        self._expired = False
+        self.session_expired()
+        self.e_pw.set_text("")
+        self.say(tr("Wylogowano."))
 
     def session_expired(self):
         if self._expired:

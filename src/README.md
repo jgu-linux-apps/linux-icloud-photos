@@ -1,6 +1,6 @@
 # Linux iCloud Photos
 
-**Current version: 0.17.5 (2026-11-14)**
+**Current version: 0.17.6 (2026-11-21)**
 
 Created by: JGu  
 Supported by Claude
@@ -173,6 +173,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
+- 0.17.6: Settings → Log out (forgets the saved session and the keyring password). Errors from background tasks are written to `debug.log` with the full traceback; the album error shows the exception type and, for “Photos service not available”, what to check (web access to iCloud data, Advanced Data Protection).
 - 0.17.5: New dark-mode app icon in the series style: the app's own symbol on a deep navy tile, the same as the other apps of the series.
 - 0.17.3: The release package again includes the 256 px PNG icon (the 0.17.2 build server lacked the image library and skipped it). No app changes.
 - 0.17.2: The Aurora theme now also colours the top bar when window transparency (glass) is on. Before, the glass setting kept the stock Adwaita header colour.

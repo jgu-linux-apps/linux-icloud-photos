@@ -1,3 +1,3 @@
-VERSION = "0.17.5"
-DATE = "2026-11-13"
+VERSION = "0.17.6"
+DATE = "2026-11-21"
 CREDITS = "Created by: JGu\nSupported by Claude"
