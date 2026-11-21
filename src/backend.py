@@ -692,7 +692,7 @@ class ICloud:
                               zoneType=zone.get("zoneType"))
             for i in range(0, len(items), 100):
                 chunk = {record_name(a._asset_record): a for a in items[i:i + 100]}
-                resp = client.lookup(list(chunk), zone_id=zid, desired_keys=["isDeleted"])
+                resp = client.lookup(record_names=list(chunk), zone_id=zid, desired_keys=["isDeleted"])
                 for rec in resp.records:
                     try:
                         name = record_name(rec)

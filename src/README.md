@@ -1,6 +1,6 @@
 # Linux iCloud Photos
 
-**Current version: 0.17.9 (2026-11-21)**
+**Current version: 0.17.10 (2026-11-21)**
 
 Created by: JGu  
 Supported by Claude
@@ -173,6 +173,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
+- 0.17.10: Deleting photos is confirmed again: the CloudKit record lookup is called with keyword arguments, as pyicloud 2026.10.1 requires (before, the confirmation failed with a TypeError although the photo was deleted).
 - 0.17.9: Apple can keep answering the library indexing check with “FAILED” while iCloud.com shows the photos normally; the app now ignores that state (and logs it) instead of refusing to load the albums.
 - 0.17.8: The library indexing check logs what Apple returned and, when the new CloudKit client does not read “FINISHED”, asks again with the plain REST query (iCloud.com showed the photos while the app reported “not finished indexing”).
 - 0.17.7: When iCloud is still indexing the photo library for a new session (“Photos service not available” caused by “not finished indexing”), the app says so and retries loading albums every minute instead of showing an error.
