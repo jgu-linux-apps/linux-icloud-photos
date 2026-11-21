@@ -328,6 +328,11 @@ class ICloud:
                             getattr(self, "zone_id", None), state, rest)
                 if rest == "FINISHED":
                     return rest
+                if "FAILED" in (state, rest):
+                    # Apple potrafi trwale zwracać FAILED, a icloud.com mimo to pokazuje zdjęcia
+                    # (nie sprawdza tego stanu). Próbujemy normalnie czytać bibliotekę.
+                    log.warning("CheckIndexingState=FAILED - ignoruję i czytam bibliotekę")
+                    return "FINISHED"
             return state
 
         typed._jgu = True
