@@ -14,7 +14,8 @@ class Resp:
 class Client:
     def __init__(s, deleted_ids=(), fail=False, drop=()):
         s.calls = []; s.deleted = set(deleted_ids); s.fail = fail; s.drop = set(drop)
-    def lookup(s, names, zone_id, desired_keys=None):
+    def lookup(s, *, record_names, zone_id, desired_keys=None):  # jak pyicloud 2026.10.1
+        names = record_names
         s.calls.append(len(list(names)))
         if s.fail: raise RuntimeError("sieć niedostępna")
         recs = []
