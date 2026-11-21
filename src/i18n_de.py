@@ -82,6 +82,7 @@ DE = {
     'Log out': 'Abmelden',
     'Removes the saved session and password from this computer': 'Entfernt die gespeicherte Sitzung und das Passwort von diesem Computer',
     'Logged out.': 'Abgemeldet.',
+    'iCloud is still preparing the photo library for this session (indexing). Retrying automatically every minute…': 'iCloud bereitet die Fotomediathek für diese Sitzung noch vor (Indizierung). Neuer Versuch automatisch jede Minute…',
     "Video player": "Videoplayer",
     "Automatic (mpv if available)": "Automatisch (mpv, falls vorhanden)",
     "Built-in player": "Integrierter Player",

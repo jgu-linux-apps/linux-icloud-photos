@@ -82,6 +82,7 @@ UK = {
     'Log out': 'Вийти',
     'Removes the saved session and password from this computer': 'Видаляє збережений сеанс і пароль з цього комп’ютера',
     'Logged out.': 'Ви вийшли.',
+    'iCloud is still preparing the photo library for this session (indexing). Retrying automatically every minute…': 'iCloud ще готує медіатеку для цього сеансу (індексування). Автоматична повторна спроба щохвилини…',
     "Video player": "Відеопрогравач",
     "Automatic (mpv if available)": "Автоматично (mpv, якщо є)",
     "Built-in player": "Вбудований програвач",

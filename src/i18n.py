@@ -203,6 +203,7 @@ EN = {
     'Wyloguj': 'Log out',
     'Usuwa zapisaną sesję i hasło z tego komputera': 'Removes the saved session and password from this computer',
     'Wylogowano.': 'Logged out.',
+    'iCloud jeszcze przygotowuje bibliotekę zdjęć dla tej sesji (indeksowanie). Ponawiam automatycznie co minutę…': 'iCloud is still preparing the photo library for this session (indexing). Retrying automatically every minute…',
     "Odtwarzacz filmów": "Video player",
     "Automatycznie (mpv, jeśli jest)": "Automatic (mpv if available)",
     "Wbudowany odtwarzacz": "Built-in player",

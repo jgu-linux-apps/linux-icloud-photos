@@ -2239,7 +2239,25 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _albums_loaded(self, albums, err):
         if err:
-            msg = tr("Błąd albumów: {0}").format(f"{type(err).__name__}: {err}")
+            chain, e = [], err
+            while e is not None and len(chain) < 5:
+                chain.append(f"{type(e).__name__}: {e}")
+                e = e.__cause__ or e.__context__
+            if any("finished indexing" in c for c in chain):
+                # Apple jeszcze indeksuje bibliotekę dla tej sesji (np. po ponownym zalogowaniu):
+                # to stan przejściowy - ponawiamy co minutę, dopóki ta sama sesja jest aktywna
+                gen = self.gen
+                self.count.set_text(tr("iCloud jeszcze przygotowuje bibliotekę zdjęć dla tej sesji "
+                                       "(indeksowanie). Ponawiam automatycznie co minutę…"))
+
+                def retry():
+                    if gen == self.gen and not self._expired and self.icloud.api is not None:
+                        log.info("ponawiam wczytanie albumów (indeksowanie iCloud)")
+                        bg(self.icloud.albums, self._albums_loaded)
+                    return False
+                GLib.timeout_add_seconds(60, retry)
+                return
+            msg = tr("Błąd albumów: {0}").format(chain[-1] if len(chain) > 1 else chain[0])
             if "service not available" in str(err).lower() or "NotActivated" in type(err).__name__:
                 msg += tr(" - Apple nie udostępnia Zdjęć tej sesji. Włącz „Dostęp do danych iCloud "
                           "w sieci” na iPhonie (przy Zaawansowanej ochronie danych), otwórz raz "
