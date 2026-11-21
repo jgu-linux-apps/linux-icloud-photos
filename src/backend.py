@@ -298,6 +298,41 @@ class ICloud:
 
         session.request = request
 
+    @staticmethod
+    def _patch_indexing_check():
+        """pyicloud zgłasza "not finished indexing", gdy stan z CheckIndexingState nie jest FINISHED,
+        także gdy nowy klient CloudKit źle odczyta odpowiedź (icloud.com działa wtedy normalnie).
+        Logujemy odczytany stan i przy wyniku innym niż FINISHED pytamy jeszcze starym zapytaniem REST."""
+        try:
+            from pyicloud.services.photos_cloudkit import service as svc
+        except Exception:  # noqa: BLE001
+            return
+        lib = getattr(svc, "PhotoLibrary", None)
+        orig = getattr(lib, "_indexing_state_via_typed_client", None)
+        if orig is None or getattr(orig, "_jgu", False):
+            return
+
+        def typed(self, client):
+            try:
+                state = orig(self, client)
+            except Exception as e:  # noqa: BLE001
+                log.warning("CheckIndexingState (typed) failed: %r", e)
+                state = None
+            if state != "FINISHED":
+                try:
+                    rest = self._indexing_state_via_rest()
+                except Exception as e:  # noqa: BLE001
+                    log.warning("CheckIndexingState (REST) failed: %r", e)
+                    rest = None
+                log.warning("CheckIndexingState zone=%s typed=%r rest=%r",
+                            getattr(self, "zone_id", None), state, rest)
+                if rest == "FINISHED":
+                    return rest
+            return state
+
+        typed._jgu = True
+        lib._indexing_state_via_typed_client = typed
+
     # ---------- logowanie ----------
     def login(self, apple_id: str, password: str) -> str:
         """Zwraca "ok" albo "2fa". Błędy logowania lecą jako wyjątki."""
@@ -313,6 +348,7 @@ class ICloud:
             cookie_directory=str(CONFIG_DIR / "session"),
         )
         self._fix_download_urls(self.api.session)
+        self._patch_indexing_check()
         if getattr(self.api, "requires_2fa", False):
             return "2fa"
         if getattr(self.api, "requires_2sa", False):
