@@ -86,7 +86,13 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
-.side-tabs button { padding: 4px 6px; }
+.side-tabs { background: alpha(currentColor, 0.07); border-radius: 999px; padding: 3px; }
+.side-tabs button { background: none; box-shadow: none; border: none; border-radius: 999px;
+                    padding: 5px 4px; min-height: 0; font-weight: 500; transition: background 150ms, color 150ms; }
+.side-tabs button:hover:not(:checked) { background: alpha(currentColor, 0.07); }
+.side-tabs button:checked { background-color: @accent_bg_color; color: @accent_fg_color;
+                            background-color: var(--accent-bg-color); color: var(--accent-fg-color);
+                            box-shadow: 0 2px 8px alpha(black, 0.18); }
 .tile { background-color: alpha(currentColor, 0.08); }
 .viewer { background-color: black; }
 .caption { color: white; background-color: rgba(0,0,0,0.55);
@@ -1805,6 +1811,10 @@ class PairingDialog(Gtk.Window):
         self.on_done()
 
 
+class _PlaceAlbum(list):
+    """Zdjęcia z jednego miejsca na mapie, wyświetlane w siatce jak album (tylko do przeglądania)."""
+
+
 SIDEBAR_MIN = 270  # najmniejsza szerokość menu, przy której mieszczą się wszystkie zakładki
 
 
@@ -1830,7 +1840,8 @@ class _TabProxy:
 
     def set_count(self, n):
         if self.key in self.win.tab_btns:
-            self.win.tab_btns[self.key].set_tooltip_text(str(n) if n else None)
+            base = {"albums": tr("Albumy"), "shared": tr("Wspólne")}.get(self.key, "")
+            self.win.tab_btns[self.key].set_tooltip_text(f"{base}: {n}" if n else base)
 
 
 class AlbumRow(Gtk.ListBoxRow):
@@ -2279,8 +2290,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.list_jump.set_visible(False)
         side.append(self.list_jump)
         # zakładki: Biblioteka / Albumy / Wspólne (jedna lista naraz, krótkie menu)
-        tabs = Gtk.Box(spacing=0, homogeneous=True)
-        tabs.add_css_class("linked")
+        tabs = Gtk.Box(spacing=2, homogeneous=True)
         tabs.add_css_class("side-tabs")
         tabs.set_margin_start(8)
         tabs.set_margin_end(8)
@@ -2289,8 +2299,11 @@ class MainWindow(Adw.ApplicationWindow):
                                     vhomogeneous=False)
         self.tab_btns = {}
         first = None
-        for key, label in (("lib", tr("Biblioteka")), ("albums", tr("Albumy")), ("shared", tr("Wspólne"))):
+        for key, label, icon in (("lib", tr("Biblioteka"), "image-x-generic-symbolic"),
+                                 ("albums", tr("Albumy"), "folder-pictures-symbolic"),
+                                 ("shared", tr("Wspólne"), "emblem-shared-symbolic")):
             b = Gtk.ToggleButton(label=label)
+            b.set_tooltip_text(label)
             if first is None:
                 first = b
             else:
@@ -2365,6 +2378,20 @@ class MainWindow(Adw.ApplicationWindow):
         grid_ov.set_child(grid_sw)
         grid_ov.add_overlay(self.rubber)
         self._install_rubberband(grid_sw)
+        self.map_back = Gtk.Button()
+        mb = Gtk.Box(spacing=6)
+        mb.append(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
+        mb.append(Gtk.Label(label=tr("Wróć do mapy")))
+        self.map_back.set_child(mb)
+        self.map_back.add_css_class("osd")
+        self.map_back.add_css_class("pill")
+        self.map_back.set_halign(Gtk.Align.START)
+        self.map_back.set_valign(Gtk.Align.START)
+        self.map_back.set_margin_start(12)
+        self.map_back.set_margin_top(12)
+        self.map_back.set_visible(False)
+        self.map_back.connect("clicked", lambda *_: self._back_to_map())
+        grid_ov.add_overlay(self.map_back)
         self.main_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=150)
         self.main_stack.set_vexpand(True)
         self.main_stack.add_named(grid_ov, "grid")
@@ -2626,6 +2653,9 @@ class MainWindow(Adw.ApplicationWindow):
         if getattr(self, "_map_web", None) is None:
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
             self._map_web = WebKit.WebView()
+            ucm = self._map_web.get_user_content_manager()
+            ucm.register_script_message_handler("photos", None)
+            ucm.connect("script-message-received::photos", self._on_map_photos)
             self._map_web.set_vexpand(True)
             self._map_web.set_hexpand(True)
             box.append(self._map_web)
@@ -2635,6 +2665,39 @@ class MainWindow(Adw.ApplicationWindow):
         self.wtitle.set_title(tr("Mapa"))
         self.wtitle.set_subtitle(title)
         return True
+
+    def _on_map_photos(self, _ucm, value):
+        """Kliknięto grupę albo pinezkę na mapie: pokaż te zdjęcia w siatce (z przyciskiem powrotu do mapy)."""
+        sess = getattr(self, "_map_session", None)
+        if sess is None:
+            return
+        try:
+            ids = json.loads(value.to_string())
+        except Exception:  # noqa: BLE001
+            return
+        with sess.lock:
+            assets = [sess.assets[i] for i in ids if 0 <= i < len(sess.assets) and sess.assets[i] is not None]
+        if not assets:
+            self.toast(tr("Te zdjęcia jeszcze się wczytują - spróbuj za chwilę"))
+            return
+        assets.sort(key=lambda a: (ICloud.asset_date(a).timestamp() if ICloud.asset_date(a) else 0),
+                    reverse=True)
+        place = _PlaceAlbum(assets)
+        self._map_title = self.wtitle.get_subtitle()
+        self.cur_title = tr("Zdjęcia z mapy")
+        self.wtitle.set_title(tr("Zdjęcia z mapy"))
+        self.wtitle.set_subtitle(tr("{0} zdjęć").format(len(assets)))
+        self.main_stack.set_visible_child_name("grid")
+        self.map_back.set_visible(True)
+        self.load_album(place)
+
+    def _back_to_map(self):
+        self.map_back.set_visible(False)
+        self.store.remove_all()
+        self.cur_album = None
+        self.main_stack.set_visible_child_name("map")
+        self.wtitle.set_title(tr("Mapa"))
+        self.wtitle.set_subtitle(getattr(self, "_map_title", "") or "")
 
     def save_album(self, row):
         dlg = Gtk.FileDialog()
@@ -2834,6 +2897,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.show_map(row, limit=30000, title=tr("Wszystkie zdjęcia"))
             return
         self._map_prev = row
+        if hasattr(self, "map_back") and self.map_back.get_visible():
+            self.map_back.set_visible(False)
+            self.main_stack.set_visible_child_name("map")  # niżej: schowaj mapę i zatrzymaj jej wczytywanie
         if hasattr(self, "main_stack") and self.main_stack.get_visible_child_name() != "grid":
             self.main_stack.set_visible_child_name("grid")
             cur = getattr(self, "_map_session", None)

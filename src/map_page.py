@@ -42,6 +42,8 @@ box-shadow:0 0 0 4px {acc}55}}
 .pp img{{display:block;width:180px;max-height:180px;object-fit:cover;border-radius:6px;margin-bottom:4px;
 background:#eee;min-height:120px}}
 .pp{{font-size:13px}}
+.gal{{display:grid;grid-template-columns:repeat(4,96px);gap:4px;max-height:320px;overflow:auto}}
+.gal img{{width:96px;height:96px;object-fit:cover;border-radius:6px;background:#ccc}}
 </style></head><body>
 <div id="bar"><b>{t}</b> · <span id="st"></span></div>
 <div id="map"></div>
@@ -52,16 +54,30 @@ const LAB = {lab};
 const map = L.map('map').setView([52, 19], 4);
 L.tileLayer('https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{maxZoom: 19,
   attribution: '&copy; OpenStreetMap contributors'}}).addTo(map);
-const group = L.markerClusterGroup({{chunkedLoading: true}});
+const group = L.markerClusterGroup({{chunkedLoading: true, zoomToBoundsOnClick: false,
+  spiderfyOnMaxZoom: false, showCoverageOnHover: false}});
+const app = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.photos;
+function show(ids, latlng) {{
+  if (app) {{ app.postMessage(JSON.stringify(ids)); return; }}
+  const imgs = ids.slice(0, 60).map(i => `<img loading="lazy" src="{thumb_url}${{i}}" alt="">`).join('');
+  L.popup({{maxWidth: 420}}).setLatLng(latlng).setContent(
+    `<div class="gal">${{imgs}}</div><div class="pp">${{ids.length}}</div>`).openOn(map);
+}}
+group.on('clusterclick', e => show(e.layer.getAllChildMarkers().map(m => m.pid), e.latlng));
+group.on('click', e => show([e.layer.pid], e.latlng));
 map.addLayer(group);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}}[c]));
 const st = document.getElementById('st');
 let have = 0, fitted = false, userMoved = false;
 map.on('dragstart zoomstart', () => {{ if (fitted) userMoved = true; }});
 function add(list) {{
-  const ms = list.map(([i, lat, lon, name, date]) => L.circleMarker([lat, lon], {{radius: 7, weight: 2,
-      color: '#ffffff', fillColor: '{acc}', fillOpacity: 0.95}}).bindPopup(
-    `<div class="pp"><img loading="lazy" src="{thumb_url}${{i}}" alt=""><b>${{esc(name)}}</b><br>${{esc(date)}}</div>`));
+  const ms = list.map(([i, lat, lon, name, date]) => {{
+    const m = L.circleMarker([lat, lon], {{radius: 7, weight: 2, color: '#ffffff', fillColor: '{acc}',
+      fillOpacity: 0.95}});
+    m.pid = i;
+    m.bindTooltip(`${{esc(name)}}<br>${{esc(date)}}`);
+    return m;
+  }});
   group.addLayers(ms);
 }}
 async function poll() {{
