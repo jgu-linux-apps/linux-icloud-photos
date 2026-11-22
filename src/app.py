@@ -1894,6 +1894,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.select_mode = False
         self.selected = []
         self.fav_override = {}
+        self._map_prev = None  # album zaznaczony przed kliknięciem „Mapa”
         self._shared_ids = set()  # id() albumów udostępnionych (tylko do odczytu)  # id -> ulubione po zmianie w tej sesji (rekord z pyicloud jest nieaktualny)
         self._rb = None
         self.cache_gb = float(cfg.get("cache_gb", 1.0))
@@ -2504,11 +2505,21 @@ class MainWindow(Adw.ApplicationWindow):
 
         dlg.choose(self, None, chosen)
 
-    def show_map(self, row):
+    def show_map(self, row, limit=6000, title=None):
         """Mapa zdjęć albumu z położeniem: strona HTML (OpenStreetMap) w przeglądarce."""
-        self.toast(tr("Szukam zdjęć z lokalizacją w „{0}”…").format(row.title))
+        title = title or row.title
+        if getattr(self, "_map_busy", False):
+            self.toast(tr("Mapa jest już przygotowywana…"))
+            return
+        self._map_busy = True
+        self.toast(tr("Szukam zdjęć z lokalizacją w „{0}”…").format(title))
+
+        def progress(k, n):
+            GLib.idle_add(lambda: (self.count.set_text(tr("Mapa: sprawdzono {0} zdjęć…").format(k)), False)[1])
 
         def done(points, err):
+            self._map_busy = False
+            self._update_count()
             if err:
                 self.toast(tr("Nie udało się przygotować mapy: {0}").format(err))
                 return
@@ -2517,12 +2528,12 @@ class MainWindow(Adw.ApplicationWindow):
                 return
             import map_page
             page = CACHE_DIR / "map.html"
-            page.write_text(map_page.build(row.title, points, {"count": tr("zdjęć na mapie: {0}")}),
+            page.write_text(map_page.build(title, points, {"count": tr("zdjęć na mapie: {0}")}),
                             encoding="utf-8")
             Gtk.UriLauncher.new(page.as_uri()).launch(self, None, None)
             self.toast(tr("Mapa otwarta w przeglądarce ({0} zdjęć)").format(len(points)))
 
-        bg(lambda: self.icloud.geo_points(row.album), done)
+        bg(lambda: self.icloud.geo_points(row.album, limit, progress), done)
 
     def save_album(self, row):
         dlg = Gtk.FileDialog()
@@ -2578,6 +2589,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.count.set_text(msg)
             self.count.set_tooltip_text(msg)
             return
+        # lista budowana zawsze od zera: drugie wywołanie (np. odświeżenie w trakcie wczytywania) nie dubluje pozycji
+        log.info("lista albumów: %d pozycji", len(albums))
+        self._clear_albums()
         by_name = dict(albums)
         cover_rows = []
         for key in PRIMARY:
@@ -2589,6 +2603,9 @@ class MainWindow(Adw.ApplicationWindow):
                 self.list_primary.append(row)
                 if not static:
                     cover_rows.append(row)
+        if "All Photos" in by_name:
+            self.list_primary.append(AlbumRow(tr("Mapa"), "mark-location-symbolic", by_name["All Photos"],
+                                              key="__map__", cover=True, static=True))
         more = [k for k in MORE_ORDER if k in by_name]
         for key in more:
             title, icon = SMART_PL[key]
@@ -2705,6 +2722,16 @@ class MainWindow(Adw.ApplicationWindow):
             self._busy = False
             self._jump_from_query()
             return
+        if row.key == "__map__":  # mapa całej biblioteki w przeglądarce; zaznaczenie wraca do albumu
+            prev = self._map_prev
+            self._busy = True
+            lb.unselect_all()
+            if prev is not None and prev.get_parent() is not None:
+                prev.get_parent().select_row(prev)
+            self._busy = False
+            self.show_map(row, limit=30000, title=tr("Wszystkie zdjęcia"))
+            return
+        self._map_prev = row
         self._busy = True  # tylko jedna zaznaczona pozycja w całym menu
         for other in self.lists:
             if other is not lb:
