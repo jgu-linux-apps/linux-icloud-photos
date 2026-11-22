@@ -963,7 +963,11 @@ class Viewer(Gtk.Window):
 
     def _fallback(self, why):
         """Zapas: otwórz bieżące wideo w osobnym oknie mpv (raz na pozycję)."""
+        if not self.get_visible() or self.store.get_n_items() == 0:
+            return  # podgląd zamknięty - użytkownik poszedł dalej
         obj = self.store.get_item(self.index)
+        if not (obj.is_video or self.live_mode) or self.stack.get_visible_child_name() != "vid":
+            return  # na ekranie jest już inne (nie filmowe) zdjęcie
         if getattr(self, "_fb_done", None) == (self.token, self.live_mode):
             return
         self._fb_done = (self.token, self.live_mode)
@@ -973,6 +977,7 @@ class Viewer(Gtk.Window):
         self.caption.set_text(self._label(why + (" → mpv" if ok else " (zainstaluj mpv)")))
 
     def _stop_video(self):
+        self.token += 1  # unieważnij trwające pobieranie filmu i strażnika odtwarzacza (nie otwieraj mpv później)
         m, self._media = self._media, None
         if m is not None:
             for s in self._sigs:
@@ -3179,7 +3184,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._rows_watching = False
             return False
         w = self.grid_sw.get_width()
-        if w > 0 and abs(w - 14 - self._rows_W) > 6:
+        if w > 0 and abs(w - 14 - 2 * GRID_PAD - self._rows_W) > 6:
             self._rows_mark_dirty(150)
         return True
 
