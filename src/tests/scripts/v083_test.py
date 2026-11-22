@@ -169,6 +169,11 @@ class T(Adw.Application):
         T_=self.tiles(); rec=T_[2]
         step("E2_tile_activate_opens_viewer", lambda: (w._tile_activate(rec[2]), len(tl(A.Viewer)))[1])
         for v in tl(A.Viewer): v.close()
+        for v in list(w.viewers): v.close()   # podgląd w głównym oknie (1.0.1+) zamyka się tak samo
+        self._rec = rec
+        later(900, self.e3)  # siatka musi się znów ułożyć po zamknięciu podglądu
+    def e3(self):
+        w=self.win; rec=self._rec; T_=self.tiles()
         # zaznaczanie w rzędach: klik i ramka
         w.select_btn.set_active(True); c=self.centre(rec); g=G(); w._rb_begin(g,*c); w._rb_end(g,0,0)
         step("E3_click_selects_in_rows", lambda: len(w.selected))
