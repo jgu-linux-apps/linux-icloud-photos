@@ -83,6 +83,7 @@ POOL = ThreadPoolExecutor(max_workers=6)
 COVER_POOL = ThreadPoolExecutor(max_workers=3)
 BATCH = 300
 FIRST_BATCH = 60
+GRID_PAD = 12  # odstęp wokół siatki (CSS gridview/rowsview), żeby poświata przy krawędziach nie była ucinana
 SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
@@ -96,7 +97,7 @@ popover.ctx button.ctx-danger { color: @error_color; }
 popover.ctx button.ctx-danger:hover { background-color: alpha(@error_color, 0.12); }
 popover.ctx separator { margin: 4px 10px; opacity: 0.5; }
 .ctx-icon { opacity: 0.75; }
-gridview, listview.rowsview { padding-top: 12px; padding-bottom: 12px; }
+gridview, listview.rowsview { padding: 12px; }
 .side-tabs { background: alpha(currentColor, 0.07); border-radius: 999px; padding: 3px; }
 .side-tabs button { background: none; box-shadow: none; border: none; border-radius: 999px;
                     padding: 5px 4px; min-height: 0; font-weight: 500; transition: background 150ms, color 150ms; }
@@ -3201,7 +3202,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._rows_src = 0
         if self.layout_mode != "rows":
             return False
-        W = max(0, self.grid_sw.get_width() - 14)
+        W = max(0, self.grid_sw.get_width() - 14 - 2 * GRID_PAD)  # GRID_PAD: odstęp, żeby poświata nie była ucinana
         if W <= 0:
             self._rows_schedule(150)
             return False
