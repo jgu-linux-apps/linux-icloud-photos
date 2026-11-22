@@ -161,11 +161,11 @@ async function nearby() {{
       const d = km(c, ll), n = k + 1;
       const m = L.marker(ll, {{icon: L.divIcon({{className: 'poi', html: `<div><span>${{n}}</span></div>`,
         iconSize: [30, 30], iconAnchor: [4, 34], popupAnchor: [12, -30]}}), zIndexOffset: 1000}})
-        .bindPopup(`<b>${{n}}. ${{esc(p.title)}}</b><br><span class="adr-${{k}}">…</span>`);
+        .bindPopup(`<b>${{n}}. ${{esc(p.title)}}</b><br><span class="adr-${{k}}">&hellip;</span>`);
       poiLayer.addLayer(m);
       const a = document.createElement('a'); a.className = 'card'; a.href = p.fullurl; a.target = '_blank';
       a.innerHTML = `<img src="${{p.thumbnail.source}}" alt=""><b><span class="n">${{n}}</span>${{esc(p.title)}}</b>`
-        + `<div class="adr adr-${{k}}">…</div><p>${{esc(p.extract)}}</p><div class="d">${{d.toFixed(1)}} km</div>`;
+        + `<div class="adr adr-${{k}}">&hellip;</div><p>${{esc(p.extract)}}</p><div class="d">${{d.toFixed(1)}} km</div>`;
       a.addEventListener('mouseenter', () => m.openPopup());
       cards.appendChild(a);
     }});
@@ -188,7 +188,7 @@ async function addresses(pages) {{
       const town = a.city || a.town || a.village || a.suburb || '';
       txt = [street, [a.postcode, town].filter(Boolean).join(' ')].filter(Boolean).join(', ') || r.display_name || '';
     }} catch (e) {{ txt = ''; }}
-    document.querySelectorAll('.adr-' + k).forEach(el => el.textContent = txt ? '📍 ' + txt : '');
+    document.querySelectorAll('.adr-' + k).forEach(el => el.textContent = txt ? '\u{{1F4CD}} ' + txt : '');
     await new Promise(res => setTimeout(res, 1100));
   }}
 }}
