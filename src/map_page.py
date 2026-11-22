@@ -62,6 +62,14 @@ color:inherit;text-decoration:none}}
 .card b{{display:block;padding:8px 12px 2px;font-size:14px}}
 .card p{{margin:0;padding:0 12px 10px;font-size:12.5px;line-height:1.4;opacity:.85}}
 .card .d{{padding:0 12px 10px;font-size:11px;opacity:.6}}
+.card .adr{{padding:0 12px 4px;font-size:12px;opacity:.8}}
+.card .n{{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
+background:#f59e0b;color:#1a1200;font-size:12px;font-weight:800;margin-right:6px;border:2px solid #fff}}
+.poi{{background:none;border:none}}
+.poi div{{position:relative;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:#f59e0b;
+border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.55)}}
+.poi span{{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transform:rotate(45deg);
+color:#1a1200;font:800 13px system-ui}}
 .gal{{display:grid;grid-template-columns:repeat(4,96px);gap:4px;max-height:320px;overflow:auto}}
 .gal img{{width:96px;height:96px;object-fit:cover;border-radius:6px;background:#ccc}}
 </style></head><body>
@@ -128,6 +136,7 @@ async function nearby() {{
   panel.classList.add('open'); nbVis();
   const c = map.getCenter(), cards = document.getElementById('cards'), pst = document.getElementById('pst');
   cards.innerHTML = ''; pst.textContent = LAB.nb_loading;
+  poiLayer.clearLayers();
   const u = 'https://{lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch'
     + `&ggscoord=${{c.lat}}|${{c.lng}}&ggsradius=10000&ggslimit=40&prop=pageimages|extracts|coordinates|info&coprop=type`
     + '&inprop=url&piprop=thumbnail&pithumbsize=400&exintro=1&explaintext=1&exsentences=2&exlimit=40';
@@ -146,16 +155,43 @@ async function nearby() {{
       .sort((a, b) => (b[0] - a[0]) || (a[1] - b[1])).slice(0, 5).map(x => x[2]);
     if (!pages.length) {{ pst.textContent = LAB.nb_none; return; }}
     pst.textContent = LAB.nb_source;
-    for (const p of pages) {{
-      const d = km(c, [p.coordinates[0].lat, p.coordinates[0].lon]);
+    const bounds = [];
+    pages.forEach((p, k) => {{
+      const ll = [p.coordinates[0].lat, p.coordinates[0].lon]; bounds.push(ll);
+      const d = km(c, ll), n = k + 1;
+      const m = L.marker(ll, {{icon: L.divIcon({{className: 'poi', html: `<div><span>${{n}}</span></div>`,
+        iconSize: [30, 30], iconAnchor: [4, 34], popupAnchor: [12, -30]}}), zIndexOffset: 1000}})
+        .bindPopup(`<b>${{n}}. ${{esc(p.title)}}</b><br><span class="adr-${{k}}">…</span>`);
+      poiLayer.addLayer(m);
       const a = document.createElement('a'); a.className = 'card'; a.href = p.fullurl; a.target = '_blank';
-      a.innerHTML = `<img src="${{p.thumbnail.source}}" alt=""><b>${{esc(p.title)}}</b><p>${{esc(p.extract)}}</p>`
-        + `<div class="d">${{d.toFixed(1)}} km</div>`;
+      a.innerHTML = `<img src="${{p.thumbnail.source}}" alt=""><b><span class="n">${{n}}</span>${{esc(p.title)}}</b>`
+        + `<div class="adr adr-${{k}}">…</div><p>${{esc(p.extract)}}</p><div class="d">${{d.toFixed(1)}} km</div>`;
+      a.addEventListener('mouseenter', () => m.openPopup());
       cards.appendChild(a);
-    }}
+    }});
+    map.fitBounds(L.latLngBounds(bounds.concat([[c.lat, c.lng]])).pad(0.25), {{maxZoom: 16, paddingBottomRight: [360, 0]}});
+    addresses(pages);
   }} catch (e) {{ pst.textContent = LAB.nb_error; }}
 }}
 nb.onclick = nearby;
+const poiLayer = L.layerGroup().addTo(map);
+panel.querySelector('.x').addEventListener('click', () => poiLayer.clearLayers());
+async function addresses(pages) {{
+  // adresy z OpenStreetMap (Nominatim) - po kolei, najwyżej 1 zapytanie na sekundę (zasady serwisu)
+  for (let k = 0; k < pages.length; k++) {{
+    const p = pages[k], u = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1'
+      + `&accept-language={lang}&lat=${{p.coordinates[0].lat}}&lon=${{p.coordinates[0].lon}}`;
+    let txt = '';
+    try {{
+      const r = await (await fetch(u)).json(), a = r.address || {{}};
+      const street = [a.road || a.pedestrian || a.square || a.footway, a.house_number].filter(Boolean).join(' ');
+      const town = a.city || a.town || a.village || a.suburb || '';
+      txt = [street, [a.postcode, town].filter(Boolean).join(' ')].filter(Boolean).join(', ') || r.display_name || '';
+    }} catch (e) {{ txt = ''; }}
+    document.querySelectorAll('.adr-' + k).forEach(el => el.textContent = txt ? '📍 ' + txt : '');
+    await new Promise(res => setTimeout(res, 1100));
+  }}
+}}
 </script></body></html>
 """
 

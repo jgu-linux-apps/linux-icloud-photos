@@ -107,6 +107,11 @@ gridview, listview.rowsview { padding: 12px; }
 .side-tabs button:checked { background-color: @accent_bg_color; color: @accent_fg_color;
                             background-color: var(--accent-bg-color); color: var(--accent-fg-color);
                             box-shadow: 0 2px 8px alpha(black, 0.18); }
+window.look-system gridview > child { border-radius: 12px; transition: box-shadow 150ms; }
+window.look-system gridview > child:hover,
+window.look-system listview.rowsview .phototile:hover {
+    box-shadow: 0 0 0 2px @window_bg_color, 0 0 0 4px alpha(@accent_bg_color, 0.85), 0 8px 22px alpha(@accent_bg_color, 0.30); }
+window.look-system listview.rowsview .phototile { border-radius: 10px; transition: box-shadow 150ms; }
 .tile { background-color: alpha(currentColor, 0.08); }
 .viewer { background-color: black; }
 .caption { color: white; background-color: rgba(0,0,0,0.55);
@@ -317,6 +322,7 @@ class Tile(Gtk.Overlay):
         pc.set_button(1)
         pc.connect("pressed", lambda g, n, x, y: self.on_press and self.on_press(self, g))
         self.add_controller(pc)
+        self.add_css_class("phototile")
         self.pic = Gtk.Picture()
         self.pic.set_size_request(size, size)
         self.pic.set_content_fit(Gtk.ContentFit.COVER)
@@ -1770,7 +1776,7 @@ class SettingsDialog(Gtk.Window):
         grid.attach(Gtk.Label(label=tr("Motyw"), xalign=0), 0, 5, 1, 1)
         self.themes = ["system", "aurora"]
         self.theme_dd = Gtk.DropDown.new_from_strings([tr("Systemowy"), "Aurora"])
-        cur_t = load_cfg().get("theme", "system")
+        cur_t = load_cfg().get("theme", "aurora")
         self.theme_dd.set_selected(self.themes.index(cur_t) if cur_t in self.themes else 0)
         self.theme_dd.connect("notify::selected", self._on_theme)
         grid.attach(self.theme_dd, 1, 5, 1, 1)
@@ -1818,6 +1824,7 @@ class SettingsDialog(Gtk.Window):
         look = getattr(self.win.get_application(), "look", None)
         if look is not None:
             look.apply(name)
+        apply_look_class(self.get_application() or self.win.get_application(), name)
 
     def _on_language(self, dd, _p):
         save_cfg(language=self.langs[dd.get_selected()])
@@ -2032,6 +2039,18 @@ def _ctx_icons():
         tr("Usuń album…"): "user-trash-symbolic",
         tr("Nowy album…"): "list-add-symbolic",
     })
+
+
+def apply_look_class(app, name):
+    """Klasa okna „look-system” włącza ramkę wokół zdjęcia pod kursorem w motywie systemowym
+    (Aurora ma własną poświatę i jej nie dostaje)."""
+    if app is None:
+        return
+    for w in app.get_windows():
+        if name == "aurora":
+            w.remove_css_class("look-system")
+        else:
+            w.add_css_class("look-system")
 
 
 class _PlaceAlbum(list):
@@ -4987,7 +5006,8 @@ class App(Adw.Application):
                           " 0 0 28px alpha(#22d3ee, 0.5); }"}
             common = "gridview > child { border-radius: 12px; transition: box-shadow 150ms; }\n"
             self.look = AuroraTheme(extra={k: common + v for k, v in glow.items()})
-            self.look.apply(load_cfg().get("theme", "system"))
+            self.look.apply(load_cfg().get("theme", "aurora"))
+        self._look_name = load_cfg().get("theme", "aurora")
         for old in ("index.json", "albums_index.json", "places.json"):  # po usuniętych Wspomnieniach
             try:
                 (CACHE_DIR / old).unlink()
@@ -5012,6 +5032,7 @@ class App(Adw.Application):
                 win.present()
         else:
             win.present()
+        apply_look_class(self, getattr(self, "_look_name", "aurora"))
         if self.pending_open and hasattr(win, "open_request"):
             req, self.pending_open = self.pending_open, None
             win.open_request(req)

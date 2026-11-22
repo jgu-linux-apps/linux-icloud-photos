@@ -1,6 +1,6 @@
 # Linux iCloud Photos
 
-**Current version: 1.0.2 (2026-11-22)**
+**Current version: 1.0.3 (2026-11-22)**
 
 Created by: JGu  
 Supported by Claude
@@ -17,6 +17,7 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 ## Features
 
 - Streams photos and videos from iCloud; no library sync to disk
+- Two themes: Aurora (default; pastel glass in light mode, aurora glow on navy in dark mode, glowing frame around the photo under the mouse) and System (stock Adwaita with an accent-colour frame around the photo under the mouse); both follow the system light/dark setting
 - Thumbnail/preview cache limited to 1 GB (least recently used files are removed)
 - Interface in English and Polish, chosen by the system language (Polish if the system is set to Polish, English otherwise)
 - German and Ukrainian are available as optional languages: choose them in Settings (applies after a restart) or force a language with `ICLOUD_PHOTOS_LANG=pl`, `en`, `de` or `uk`. The system language only selects Polish or English automatically. The German and Ukrainian texts were written without review by native speakers
@@ -35,7 +36,7 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Actions on the selection: add to an album, add to or remove from favourites, save originals to a folder
 - Adding to an album first checks which photos are already in it, skips them and tells you the album name
 - Only the photos that are not in the album yet are added, with a summary of how many were skipped
-- Settings window: cache size limit (GB), "Clear cache" button, video player (automatic / mpv / built-in)
+- Settings window: cache size limit (GB), "Clear cache" button, video player (automatic / mpv / built-in), language, theme (Aurora - the default - or System), window transparency, and "Log out"
 - Left menu with three tabs: "Library" (All Photos, Favourites, Videos, Live Photos, Screenshots, Map and the other media types, Hidden, Recently Deleted), "Albums" ("New album…" and your albums) and "Shared" (shown only when you have shared albums). The chosen tab is remembered; the album search box at the top searches the albums. The menu is always wide enough for all three tabs
 - Album cover thumbnails (same size for all, cached on disk); star icon for Favorites, camera icon for Videos
 - Section titles and "All Photos" are bold; app version and date are shown at the bottom of the menu
@@ -54,14 +55,14 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Photo zoom bar (− / slider / + / Fit), pinch gesture, double-click zoom and drag to pan
 - Original-quality image is fetched automatically when you zoom in
 - Video thumbnails (poster frame) in the grid and a play button in the viewer
-- Videos open in a separate mpv window and use the light H.264 version instead of the huge original
+- Videos play in the viewer inside the main window (built-in player, the light H.264 version instead of the huge original); `M` or right-click → "Play in mpv" opens them in mpv
 - If streaming a video fails, the app automatically downloads it to the cache and plays the local file
 - If mpv still fails, a message shows the reason (details in `mpv.log` and `debug.log`)
 - Optional built-in video player (set `ICLOUD_PHOTOS_EMBEDDED_VIDEO=1`)
 - Live Photos: LIVE badge, play with the LIVE button, `L`, Space or by pressing and holding the photo
 - Photo information: file name, capture date, added date, dimensions, size, location and device (EXIF)
 - Place name lookup via OpenStreetMap only on request; "Show on map" link
-- Right-click menu: Information, Add to album, Play in mpv, Send to TV, Save original as…, Copy file name
+- Right-click menu on a photo (with icons): Information, Slideshow from this photo, Add to album, Share…, Send to TV, Save original as…, Copy file name, Hide / Unhide, Remove from album (in your own albums), Delete… - and in Recently Deleted: Restore and Delete forever…
 - "Add to album" in the right-click menu lists the 3 most recently used albums plus "Add to another album…"
 - Right-clicking a photo that is part of the selection adds the whole selection
 - The photo viewer has an "Add to album" button (and the `A` key) with the same recent-albums list
@@ -82,7 +83,7 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Shared albums: a "Shared albums (N)" section in the left menu lists the iCloud Shared Albums you own or were invited to; they can be viewed, played, cast and saved, but not changed from this app
 - Save a whole album: right-click an album in the left menu → "Save the whole album to a folder…" (a subfolder with the album name; existing files are not overwritten)
 - Map: "Map" in the Library tab shows the whole library, and right-click on an album → "Show photos on a map" shows just that album. The map replaces the photo grid in the main window (WebKitGTK; without it, it opens in the browser) and the pins are added while the app goes through the photos (grouped when zoomed out). iCloud cannot search photos by place, so the app reads the whole library, in 12 parallel parts (about 45 s for 14,000 photos, the first pins after a few seconds); clicking a group (the number) or a single pin shows those photos in the photo grid, with a "Back to the map" button; hovering a pin shows the file name and date. The map is muted to keep the pins readable: dark navy with outlines in a dark theme, grey in a light theme. Locations come from the photo metadata stored in iCloud ({GPS}), no photo files are downloaded. The points found are remembered, so the next time the map shows them immediately and only adds new photos. The page is served by the app on 127.0.0.1 only (random port and address) and loads the OpenStreetMap tiles and the Leaflet library from the internet
-- Nearby places on the map: when you zoom in, "What is worth seeing nearby?" opens a panel on the right with up to 5 sights near the map centre (photo, short description, distance), taken from Wikipedia in the app language. Only the map centre coordinates are sent to Wikipedia, and only when you click the button
+- Nearby places on the map: when you zoom in, "What is worth seeing nearby?" opens a panel on the right with up to 5 sights near the map centre (photo, short description, address, distance), taken from Wikipedia in the app language; each place gets a numbered pin on the map, and hovering a card shows its pin. Only the map centre and the places' coordinates are sent (to Wikipedia and to OpenStreetMap Nominatim for the addresses), and only when you click the button
 - Viewer shortcuts and buttons: `S` (or the star button) adds to or removes from favourites, `R` / `Shift+R` (or the rotate button) rotates the photo in the viewer only (the photo in iCloud is not changed), `I` shows information
 - The pinned library versions (pyicloud, keyring, PyChromecast, pyatv) are the ones the app was tested with; the app warns if the installed pyicloud differs
 - Picker mode for other apps (`--pick`): `linux-icloud-photos --pick --pick-out result.json --pick-dir DIR [--pick-max 30]` opens the app with a read-only library (no delete, favourite, album or upload actions). You select photos and videos and click "Choose"; they are exported to DIR (JPEG/PNG/GIF unchanged, HEIC converted to JPEG, videos as H.264, Live Photos as a still photo) and listed in the JSON file. Exit code 0 = files chosen, 1 = cancelled. linux-whazzapp uses it for "Photos & videos" in the WhatsApp attach menu
@@ -145,14 +146,15 @@ sudo dpkg-reconfigure linux-icloud-photos
 
 - Grid: `Ctrl +`, `Ctrl −`, `Ctrl 0` (thumbnail size), `F11` (fullscreen), `F5` or `Ctrl+R` (refresh the library)
 - Grid: drag with the left mouse button (rubber-band selection), `Ctrl`+drag (toggle), `Ctrl`+click (start selecting), `Ctrl A` (select all loaded photos), `Esc` (leave selection mode)
-- Viewer: `←` `→` `Home` `End` (navigate), `Ctrl +/−/0` (zoom), `F` (fullscreen), `I` (information)
-- Viewer: `L` or Space (Live Photo / play video), `M` (open video in mpv), `A` (add to album), `Esc` (close)
+- Viewer: `←` `→` `Home` `End` (navigate), `Ctrl +/−/0` (zoom), `F` (fullscreen), `I` (information), `S` (favourite), `R` / `Shift+R` (rotate in the viewer), `Delete` (delete)
+- Viewer: `L` or Space (Live Photo / play video), `M` (open video in mpv), `A` (add to album), `Esc` (back to the photos)
 - Slideshow: Space (pause), `←` `→` (previous/next), `Esc` (exit)
 
 ## Requirements and limitations
 
 - Ubuntu 24.04 or newer (GTK 4.10+, libadwaita 1.2+, Python 3.10+). The minimum versions come from the API the app uses; it was tested on GTK 4.14 and libadwaita 1.5. On older systems the app exits with a clear message instead of failing in unclear ways
 - Other distributions: use the Flatpak
+- The map inside the window needs WebKitGTK 6 (`gir1.2-webkit-6.0`, recommended by the package); without it the map opens in the browser
 - Advanced Data Protection must be turned off in your Apple account (otherwise the web API is unavailable)
 - The two-factor session expires every few weeks; the unofficial API may change without notice
 - Accounts that use legacy two-step verification (trusted devices) are not supported
@@ -183,6 +185,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
+- 1.0.3: Map: the places in "What is worth seeing nearby?" are shown on the map as numbered orange pins (readable in light and dark themes) and each card shows the address (OpenStreetMap). Aurora is the default theme (a theme chosen earlier in Settings is kept). The System theme also shows a frame in the accent colour around the photo under the mouse, and both themes now frame photos in the Rows layout too.
 - 1.0.2: Share: the share button in the selection bar and "Share…" in the right-click menu prepare the photos as files ready to send (HEIC converted to JPEG, videos as H.264) and offer WhazzApp (copies them to the clipboard and opens WhazzApp, paste with Ctrl+V in the chat), e-mail with attachments, another app (for one file), copy to clipboard and show in folder.
 - 1.0.1: Map: "What is worth seeing nearby?" button when zoomed in (zoom 11+) opens a side panel on the right with up to 5 places within 10 km of the map centre, each with a photo, a short description and the distance (from Wikipedia in the app language; clicking a place opens its article in the browser). Numbers on photo groups are readable in the dark theme. Nicer right-click menus (icons, rounded, slightly translucent, delete actions in red) in light and dark themes; the glow of the top row of photos is no longer cut off. Photos and videos open in the main window, in place of the grid (like the map), with a "Back" button and Esc to return; videos play in the built-in player there (M still opens mpv). Fixed the error message when the map could not be prepared.
 - 1.0.0: Faster start of All Photos (order correction remembered, first 60 photos shown at once); start-up splash screen (light or dark, following the system theme); Recently Deleted with "Restore" and "Delete forever"; hide and unhide photos; create, rename and delete albums and remove photos from an album; Shared Albums section (view only); save a whole album to a folder; map of an album's photos (OpenStreetMap in the browser); "Map" entry in the left menu (opens at once, pins are added progressively); left menu with Library / Albums / Shared tabs; map inside the main window, muted dark/light; viewer shortcuts `S` (favourite) and `R` (rotate in the viewer). New backend test for these operations.
