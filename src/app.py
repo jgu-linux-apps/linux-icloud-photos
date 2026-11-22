@@ -4498,8 +4498,22 @@ class App(Adw.Application):
         threading.Thread(target=prune_cache,
                          args=(int(float(load_cfg().get("cache_gb", 1.0)) * 1024**3),),
                          daemon=True).start()
-        win = self.props.active_window or MainWindow(self)
-        win.present()
+        win = self.props.active_window
+        if win is None:
+            win = MainWindow(self)
+            if PICK is None and os.environ.get("ICLOUD_PHOTOS_NO_SPLASH") != "1" and not os.environ.get("TEST_TMP"):
+                try:
+                    from splash import Splash
+                    sp = Splash(self)
+                    sp.present()
+                    sp.finish(win.present)
+                except Exception as e:  # noqa: BLE001
+                    log.warning("ekran startowy: %r", e)
+                    win.present()
+            else:
+                win.present()
+        else:
+            win.present()
         if self.pending_open and hasattr(win, "open_request"):
             req, self.pending_open = self.pending_open, None
             win.open_request(req)

@@ -18,6 +18,7 @@ Numery linii dotyczą wersji 0.9.1 (mogą się przesuwać po zmianach).
 | `bridge.py` | 230 | Most dla innych aplikacji bez okna (linux-skytrack): lista albumów, miniatury albumu albo zakresu dat, tworzenie albumu ze zdjęć z podanych dni, wysyłanie pliku do folderu w iCloud Drive (0.16.0, kopie zapasowe SkyTrack). Zapisana sesja, nigdy nie pyta o hasło/2FA (błąd `login_required`). Wynik JSON. Wywoływany z `app.py` przed importem GTK |
 | `exif.py` | 100 | Własny, minimalny parser EXIF (JPEG/HEIC) - model telefonu, obiektyw, ekspozycja, GPS |
 | `map_page.py` | 60 | HTML page with a Leaflet/OpenStreetMap map of an album's geotagged photos (opened in the browser) |
+| `splash.py` | 130 | Start-up splash screen drawn with Cairo (light/dark from the system theme) |
 | `version.py` | 2 | `VERSION` i `DATE` (pokazywane na dole menu; czyta je też `build-deb.sh`) |
 | `packaging/` | | `launcher`, `postinst`/`postrm`, `control`, plik `.desktop`, ikona SVG, `copyright` |
 | `flatpak/` | | Manifest, metainfo, skrypty budowania i usuwania (nieprzetestowane) |
