@@ -6,7 +6,7 @@
   "context_menu_has_slideshow -> ['Pokaz slajdów od tego zdjęcia']",
   "slideshow_from_context_menu_starts_at_photo -> (1, True)",
   "viewer_has_slideshow_button -> (True, 'Pokaz slajdów od tego zdjęcia', True, True)",
-  "viewer_button_order -> ['Button', 'Button', 'MenuButton', 'Button', 'Button']",
+  "viewer_button_order -> ['Button', 'Button', 'Button', 'Button', 'MenuButton', 'Button', 'Button']",
   "slideshow_opened_from_viewer -> (1, True, False)",
   "glass_off_by_default -> (0, False, 0.0)",
   "glass_off_window_opaque -> [True, True]",

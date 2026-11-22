@@ -74,7 +74,7 @@ class T(Adw.Application):
         step("covers_loaded", lambda: [pr[0].thumb.get_paintable() is not None, pr[3].thumb.get_paintable() is not None])
         ur=[w.list_user.get_row_at_index(i) for i in range(3)]
         step("user_album_covers", lambda: [r.thumb.get_paintable() is not None for r in ur])
-        step("expanders_bold", lambda: (w.exp_more.get_label_widget().has_css_class("heading"), w.exp_user.get_label_widget().get_text()))
+        step("side_tabs", lambda: ([b.get_label() for b in w.tab_btns.values()], w.tab_btns["albums"].get_tooltip_text(), w.tab_btns["shared"].get_visible()))
         step("version_label_matches_version_py", lambda: w.sidebar_scroller.get_last_child().get_text() == f"v{A.VERSION}  ·  {A.DATE}\n{A.CREDITS}")
         step("grid_items", lambda: w.store.get_n_items())
         self.quit()

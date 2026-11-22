@@ -7,10 +7,10 @@
   "videos_camera -> (True, 'camera-video-symbolic')",
   "covers_loaded -> [True, True]",
   "user_album_covers -> [True, True, True]",
-  "expanders_bold -> (True, 'Moje albumy (3)')",
   "version_label_matches_version_py -> True",
   "grid_items -> 300",
-  "EXCEPTIONS: none"
+  "EXCEPTIONS: none",
+  "side_tabs -> (['Biblioteka', 'Albumy', 'Wspólne'], 'Albumy: 3', False)"
  ],
  "runs": 2,
  "dropped_unstable": 0
