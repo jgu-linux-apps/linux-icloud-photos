@@ -177,7 +177,7 @@ nb.onclick = nearby;
 const poiLayer = L.layerGroup().addTo(map);
 panel.querySelector('.x').addEventListener('click', () => poiLayer.clearLayers());
 async function addresses(pages) {{
-  // adresy z OpenStreetMap (Nominatim) - po kolei, najwyżej 1 zapytanie na sekundę (zasady serwisu)
+  // addresses from OpenStreetMap (Nominatim): one by one, at most 1 request per second (service policy)
   for (let k = 0; k < pages.length; k++) {{
     const p = pages[k], u = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1'
       + `&accept-language={lang}&lat=${{p.coordinates[0].lat}}&lon=${{p.coordinates[0].lon}}`;
@@ -188,7 +188,7 @@ async function addresses(pages) {{
       const town = a.city || a.town || a.village || a.suburb || '';
       txt = [street, [a.postcode, town].filter(Boolean).join(' ')].filter(Boolean).join(', ') || r.display_name || '';
     }} catch (e) {{ txt = ''; }}
-    document.querySelectorAll('.adr-' + k).forEach(el => el.textContent = txt ? '\u{{1F4CD}} ' + txt : '');
+    document.querySelectorAll('.adr-' + k).forEach(el => el.textContent = txt ? '\\u{{1F4CD}} ' + txt : '');
     await new Promise(res => setTimeout(res, 1100));
   }}
 }}
