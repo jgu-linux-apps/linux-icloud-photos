@@ -23,7 +23,9 @@
   "map_server_thumb -> b'JPEGDATA'",
   "map_server_bad_token -> EXC HTTPError: HTTP Error 404: Not Found",
   "gps_from_metadata -> [(54.48, 18.56), (-33.9, -151.2), None]",
-  "map_dedupe -> (True, False, 1, True)"
+  "map_dedupe -> (True, False, 1, True)",
+  "geo_fast_all_ranges -> (334, 334, [0, 3, 6, 9])",
+  "geo_fast_stop -> 0"
  ],
  "runs": 2,
  "dropped_unstable": 0

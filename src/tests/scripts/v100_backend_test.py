@@ -109,4 +109,12 @@ step("gps_from_metadata", lambda: [backend.ICloud.asset_gps(MA(1, {"Latitude": 5
 ms2 = map_page.MapSession("T", {"count": "{0}", "loading": "{0}", "none": "-"}, lambda a: b"")
 step("map_dedupe", lambda: (ms2.add(None, 1, 2, "a", "d", key="x"), ms2.add(Asset(1), 1, 2, "a", "d", key="x"), len(ms2.points), ms2.assets[0] is not None))
 ms2.close()
+class PagedAlbum:
+    def __init__(s, n): s.items = [Asset(i, lat=(50.0 if i % 3 == 0 else None)) for i in range(n)]
+    def __len__(s): return len(s.items)
+    def _get_photos_at(s, off, direction, size): return iter(s.items[off:off + size // 2])
+ic, _ = make(Client())
+got = list(ic.iter_geo_fast(PagedAlbum(1000), workers=7, page=60))
+step("geo_fast_all_ranges", lambda: (len(got), len({a.id for a, *_ in got}), sorted(int(a.id[2:]) for a, *_ in got)[:4]))
+step("geo_fast_stop", lambda: len(list(ic.iter_geo_fast(PagedAlbum(1000), workers=4, should_stop=lambda: True))))
 ms.close()

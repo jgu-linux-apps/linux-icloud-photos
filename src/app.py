@@ -2617,12 +2617,14 @@ class MainWindow(Adw.ApplicationWindow):
                 sess.checked = k
             found = []
             try:
-                for a, lat, lon, name, date in self.icloud.iter_geo(row.album, limit, checked):
-                    if sess.stop:
-                        break
-                    found.append([a.id, lat, lon, name, date])
+                seen = set()
+                for a, lat, lon, name, date in self.icloud.iter_geo_fast(
+                        row.album, workers=12, on_checked=checked, should_stop=lambda: sess.stop):
+                    if a.id not in seen:
+                        seen.add(a.id)
+                        found.append([a.id, lat, lon, name, date])
                     sess.add(a, lat, lon, name, date, key=a.id)
-                else:
+                if not sess.stop:
                     try:  # pełne przejście: zapisz punkty, następna mapa pokaże je natychmiast
                         data = {k: v for k, v in cached.items() if k != ckey}
                         data[ckey] = found

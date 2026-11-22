@@ -931,6 +931,60 @@ class ICloud:
         if on_checked:
             on_checked(k)
 
+    def iter_geo_fast(self, album, workers: int = 6, page: int = 200, on_checked=None, should_stop=None):
+        """Jak iter_geo, ale bibliotekę dzieli na `workers` zakresów pobieranych równolegle (iCloud nie umie
+        szukać po miejscu, więc trzeba przejrzeć wszystkie rekordy - równolegle trwa to kilka razy krócej).
+        Wyniki przychodzą w kolejności pobrania."""
+        import copy
+        import queue
+        from concurrent.futures import ThreadPoolExecutor
+
+        from pyicloud.services.photos import DirectionEnum
+
+        total = len(album)
+        if not total:
+            return
+        span = -(-total // workers)
+        q = queue.Queue()
+        checked = [0]
+        lock = threading.Lock()
+
+        def work(start, end):
+            al = copy.copy(album)
+            off = start
+            try:
+                while off < end and not (should_stop and should_stop()):
+                    n = 0
+                    for a in al._get_photos_at(off, DirectionEnum.ASCENDING, min(page, end - off) * 2):
+                        n += 1
+                        pos = self.asset_gps(a)
+                        if pos is not None:
+                            d = self.asset_date(a)
+                            q.put((a, pos[0], pos[1], a.filename, d.strftime("%Y-%m-%d %H:%M") if d else ""))
+                    if n == 0:
+                        break
+                    off += n
+                    with lock:
+                        checked[0] += n
+                    if on_checked:
+                        on_checked(min(checked[0], total))
+            except Exception as e:  # noqa: BLE001
+                log.warning("mapa: zakres %d-%d przerwany: %r", start, end, e)
+            finally:
+                q.put(None)
+
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            ranges = [(i * span, min(total, (i + 1) * span)) for i in range(workers) if i * span < total]
+            for r in ranges:
+                ex.submit(work, *r)
+            left = len(ranges)
+            while left:
+                item = q.get()
+                if item is None:
+                    left -= 1
+                else:
+                    yield item
+
     def geo_points(self, album, limit: int = 6000) -> list[dict]:
         return [{"lat": la, "lon": lo, "name": n, "date": d}
                 for _a, la, lo, n, d in self.iter_geo(album, limit)]
