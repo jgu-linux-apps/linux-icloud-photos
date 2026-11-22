@@ -198,6 +198,7 @@ EN = {
     "Limit pamięci podręcznej (GB)": "Cache size limit (GB)",
     "Zajęte teraz": "Used now",
     "Wyczyść pamięć podręczną": "Clear cache",
+    'Otwórz w przeglądarce': 'Open in the browser',
     'sprawdzono {0} zdjęć…': 'checked {0} photos…',
     'Mapa otwarta w przeglądarce - pinezki dochodzą na bieżąco': 'Map opened in the browser - pins are added as photos are checked',
     'Mapa': 'Map',

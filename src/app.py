@@ -2590,14 +2590,32 @@ class MainWindow(Adw.ApplicationWindow):
         sess.stop = False
         self._map_session = sess
 
+        cache_file = CACHE_DIR / "map_points.json"
+        ckey = getattr(row, "key", None) or title
+        try:
+            cached = json.loads(cache_file.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            cached = {}
+        for pid, lat, lon, name, date in cached.get(ckey, []):  # od razu: punkty z poprzedniego otwarcia mapy
+            sess.add(None, lat, lon, name, date, key=pid)
+
         def work():
             def checked(k):
                 sess.checked = k
+            found = []
             try:
                 for a, lat, lon, name, date in self.icloud.iter_geo(row.album, limit, checked):
                     if sess.stop:
                         break
-                    sess.add(a, lat, lon, name, date)
+                    found.append([a.id, lat, lon, name, date])
+                    sess.add(a, lat, lon, name, date, key=a.id)
+                else:
+                    try:  # pełne przejście: zapisz punkty, następna mapa pokaże je natychmiast
+                        data = {k: v for k, v in cached.items() if k != ckey}
+                        data[ckey] = found
+                        cache_file.write_text(json.dumps(data), encoding="utf-8")
+                    except OSError:
+                        pass
             except Exception as e:  # noqa: BLE001
                 log.warning("mapa %s:", title, exc_info=True)
                 GLib.idle_add(lambda: (self.toast(tr("Nie udało się przygotować mapy: {0}").format(e)), False)[1])
@@ -2606,8 +2624,53 @@ class MainWindow(Adw.ApplicationWindow):
                 log.info("mapa %s: %d zdjęć z lokalizacją z %d", title, len(sess.points), sess.checked)
 
         threading.Thread(target=work, daemon=True).start()
-        Gtk.UriLauncher.new(sess.url).launch(self, None, None)
-        self.toast(tr("Mapa otwarta w przeglądarce - pinezki dochodzą na bieżąco"))
+        if not self._open_map_window(sess, title):  # bez WebKitGTK: zwykła przeglądarka
+            Gtk.UriLauncher.new(sess.url).launch(self, None, None)
+            self.toast(tr("Mapa otwarta w przeglądarce - pinezki dochodzą na bieżąco"))
+
+    def _open_map_window(self, sess, title):
+        """Mapa w oknie aplikacji (WebKitGTK 6). Zwraca False, gdy WebKit nie jest zainstalowany."""
+        try:
+            gi.require_version("WebKit", "6.0")
+            from gi.repository import WebKit
+        except (ValueError, ImportError):
+            log.info("brak WebKitGTK 6.0 - mapa w przeglądarce")
+            return False
+        win = getattr(self, "_map_win", None)
+        if win is None:
+            win = Adw.ApplicationWindow(application=self.get_application(), default_width=1100,
+                                        default_height=750)
+            tv = Adw.ToolbarView()
+            hb = Adw.HeaderBar()
+            win._wt = Adw.WindowTitle(title=tr("Mapa"))
+            hb.set_title_widget(win._wt)
+            ext = Gtk.Button(icon_name="web-browser-symbolic")
+            ext.set_tooltip_text(tr("Otwórz w przeglądarce"))
+            ext.connect("clicked", lambda *_: Gtk.UriLauncher.new(win._url).launch(win, None, None))
+            hb.pack_end(ext)
+            tv.add_top_bar(hb)
+            win._web = WebKit.WebView()
+            win._web.set_vexpand(True)
+            tv.set_content(win._web)
+            win.set_content(tv)
+
+            def closed(*_):
+                cur = getattr(self, "_map_session", None)
+                if cur is not None:
+                    cur.stop = True
+                    cur.close()
+                    self._map_session = None
+                self._map_win = None
+                return False
+
+            win.connect("close-request", closed)
+            self._map_win = win
+        win._url = sess.url
+        win._wt.set_title(tr("Mapa"))
+        win._wt.set_subtitle(title)
+        win._web.load_uri(sess.url)
+        win.present()
+        return True
 
     def save_album(self, row):
         dlg = Gtk.FileDialog()

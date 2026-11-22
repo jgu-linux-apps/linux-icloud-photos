@@ -99,4 +99,14 @@ ms.done = True
 step("map_server_points_from", lambda: _j.loads(get("points?from=1")))
 step("map_server_thumb", lambda: get("thumb/0"))
 step("map_server_bad_token", lambda: urllib.request.urlopen(ms.url.replace(ms.token, "x"), timeout=5).status)
+import plistlib
+class MA(Asset):
+    def __init__(s, i, gps):
+        super().__init__(i); s._master_record = {"fields": {"mediaMetaDataEnc": {"value": plistlib.dumps({"{GPS}": gps})}}}
+step("gps_from_metadata", lambda: [backend.ICloud.asset_gps(MA(1, {"Latitude": 54.48, "LatitudeRef": "N", "Longitude": 18.56, "LongitudeRef": "E"})),
+                                   backend.ICloud.asset_gps(MA(2, {"Latitude": 33.9, "LatitudeRef": "S", "Longitude": 151.2, "LongitudeRef": "W"})),
+                                   backend.ICloud.asset_gps(MA(3, {}))])
+ms2 = map_page.MapSession("T", {"count": "{0}", "loading": "{0}", "none": "-"}, lambda a: b"")
+step("map_dedupe", lambda: (ms2.add(None, 1, 2, "a", "d", key="x"), ms2.add(Asset(1), 1, 2, "a", "d", key="x"), len(ms2.points), ms2.assets[0] is not None))
+ms2.close()
 ms.close()

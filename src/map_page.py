@@ -74,7 +74,7 @@ class MapSession:
 
     def __init__(self, title, labels, thumb_fn):
         self.title, self.labels, self.thumb_fn = title, labels, thumb_fn
-        self.points, self.assets = [], []
+        self.points, self.assets, self.keys = [], [], {}
         self.checked, self.done = 0, False
         self.lock = threading.Lock()
         self.token = secrets.token_urlsafe(12)
@@ -131,11 +131,20 @@ class MapSession:
     def url(self):
         return f"http://127.0.0.1:{self.server.server_address[1]}/{self.token}/"
 
-    def add(self, asset, lat, lon, name, date):
+    def add(self, asset, lat, lon, name, date, key=None):
+        """Dodaje pinezkę; key (id zdjęcia) zapobiega dublom, gdy punkt był już w pamięci podręcznej."""
         with self.lock:
+            if key is not None:
+                if key in self.keys:
+                    j = self.keys[key]
+                    if self.assets[j] is None:
+                        self.assets[j] = asset  # punkt z pamięci: teraz wiadomo, skąd wziąć miniaturę
+                    return False
+                self.keys[key] = len(self.assets)
             i = len(self.assets)
             self.assets.append(asset)
             self.points.append([i, round(lat, 6), round(lon, 6), name, date])
+            return True
 
     def close(self):
         try:

@@ -77,6 +77,7 @@ UK = {
     "Cache size limit (GB)": "Ліміт розміру кешу (ГБ)",
     "Used now": "Зайнято зараз",
     "Clear cache": "Очистити кеш",
+    'Open in the browser': 'Відкрити в браузері',
     'checked {0} photos…': 'перевірено {0} фото…',
     'Map opened in the browser - pins are added as photos are checked': 'Карту відкрито в браузері - мітки додаються поступово',
     'Map': 'Карта',

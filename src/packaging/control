@@ -8,7 +8,7 @@ Homepage: https://github.com/jgu-linux-apps/linux-icloud-photos
 Replaces: icloud-photos-linux
 Conflicts: icloud-photos-linux
 Depends: python3 (>= 3.10), python3-venv, python3-gi, gir1.2-gtk-4.0 (>= 4.10), gir1.2-adw-1 (>= 1.2)
-Recommends: libgtk-4-media-gstreamer, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, heif-gdk-pixbuf, librsvg2-common, mpv, python3-keyring
+Recommends: gir1.2-webkit-6.0, libgtk-4-media-gstreamer, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-libav, heif-gdk-pixbuf, librsvg2-common, mpv, python3-keyring
 Description: Unofficial iCloud Photos client for Ubuntu (GTK4)
  Browse iCloud photos, albums, Live Photos and videos by streaming them, without
  syncing the library to disk. Only a small, size-limited thumbnail cache is kept.

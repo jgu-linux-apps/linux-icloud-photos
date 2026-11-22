@@ -77,6 +77,7 @@ DE = {
     "Cache size limit (GB)": "Cache-Größenlimit (GB)",
     "Used now": "Aktuell belegt",
     "Clear cache": "Cache leeren",
+    'Open in the browser': 'Im Browser öffnen',
     'checked {0} photos…': '{0} Fotos geprüft…',
     'Map opened in the browser - pins are added as photos are checked': 'Karte im Browser geöffnet - Pins kommen laufend hinzu',
     'Map': 'Karte',
