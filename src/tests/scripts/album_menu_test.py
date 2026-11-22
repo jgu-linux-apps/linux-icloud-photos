@@ -100,7 +100,7 @@ def labels(box):
     for c in kids(box):
         if isinstance(c, Gtk.Separator): out.append("---")
         elif isinstance(c, Gtk.Button):
-            ch=c.get_child(); out.append(ch.get_text() if isinstance(ch, Gtk.Label) else (c.get_label() or "?"))
+            ch=c.get_child(); out.append(ch.get_text() if isinstance(ch, Gtk.Label) else (next((x.get_text() for x in kids(ch) if isinstance(x, Gtk.Label)), None) if isinstance(ch, Gtk.Box) else None) or c.get_label() or "?")
     return out
 def popover_of(widget):
     pops=[c for c in kids(widget) if isinstance(c, Gtk.Popover)]
@@ -163,7 +163,7 @@ class T(Adw.Application):
         w.set_select_mode(True); w.selected=[T_[0].bound,T_[1].bound,T_[2].bound]; w._refresh_selection()
         w.show_context_menu(T_[0], 20, 20, T_[0].bound); pop2=popover_of(T_[0])
         step("context_menu_selection_suffix", lambda: [l for l in labels(pop2.get_child()) if "albumu" in l])
-        btn=[c for c in kids(pop2.get_child()) if isinstance(c, Gtk.Button) and "Rodzina" in (c.get_child().get_text() if isinstance(c.get_child(), Gtk.Label) else "")][0]
+        btn=[c for c in kids(pop2.get_child()) if isinstance(c, Gtk.Button) and "Rodzina" in " ".join(x.get_text() for x in [c.get_child()] + kids(c.get_child()) if isinstance(x, Gtk.Label))][0]
         step("context_click_adds_all_selected", lambda: (btn.emit("clicked"), None)[1]); later(900,self.f)
     def f(self):
         w=self.win; fk=self.fk; w.set_select_mode(False)

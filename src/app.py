@@ -87,6 +87,16 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+popover.ctx > contents { border-radius: 14px; padding: 6px; min-width: 230px;
+                         background-color: alpha(@popover_bg_color, 0.95);
+                         box-shadow: 0 10px 30px alpha(black, 0.28), 0 0 0 1px alpha(currentColor, 0.08); }
+popover.ctx button { border-radius: 9px; padding: 6px 10px; min-height: 0; font-weight: normal; }
+popover.ctx button:hover { background-color: alpha(@accent_bg_color, 0.16); }
+popover.ctx button.ctx-danger { color: @error_color; }
+popover.ctx button.ctx-danger:hover { background-color: alpha(@error_color, 0.12); }
+popover.ctx separator { margin: 4px 10px; opacity: 0.5; }
+.ctx-icon { opacity: 0.75; }
+gridview, listview.rowsview { padding-top: 12px; padding-bottom: 12px; }
 .side-tabs { background: alpha(currentColor, 0.07); border-radius: 999px; padding: 3px; }
 .side-tabs button { background: none; box-shadow: none; border: none; border-radius: 999px;
                     padding: 5px 4px; min-height: 0; font-weight: 500; transition: background 150ms, color 150ms; }
@@ -1812,6 +1822,31 @@ class PairingDialog(Gtk.Window):
         self.on_done()
 
 
+ICONS_CTX = {}  # uzupełniane po starcie (etykiety zależą od języka)
+
+
+def _ctx_icons():
+    ICONS_CTX.update({
+        tr("Informacje"): "dialog-information-symbolic",
+        tr("Pokaz slajdów od tego zdjęcia"): "media-playback-start-symbolic",
+        tr("Odtwórz w mpv"): "media-playback-start-symbolic",
+        tr("Wyślij na TV"): "video-display-symbolic",
+        tr("Zapisz oryginał jako…"): "document-save-symbolic",
+        tr("Kopiuj nazwę pliku"): "edit-copy-symbolic",
+        tr("Ukryj"): "view-conceal-symbolic",
+        tr("Odkryj"): "view-reveal-symbolic",
+        tr("Usuń z albumu"): "list-remove-symbolic",
+        tr("Usuń…"): "user-trash-symbolic",
+        tr("Przywróć"): "edit-undo-symbolic",
+        tr("Usuń na zawsze…"): "edit-delete-symbolic",
+        tr("Zapisz cały album do folderu…"): "folder-download-symbolic",
+        tr("Pokaż zdjęcia na mapie"): "mark-location-symbolic",
+        tr("Zmień nazwę…"): "document-edit-symbolic",
+        tr("Usuń album…"): "user-trash-symbolic",
+        tr("Nowy album…"): "list-add-symbolic",
+    })
+
+
 class _PlaceAlbum(list):
     """Zdjęcia z jednego miejsca na mapie, wyświetlane w siatce jak album (tylko do przeglądania)."""
 
@@ -1936,6 +1971,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._jump_q = None
         self.select_mode = False
         self.selected = []
+        _ctx_icons()
         self.fav_override = {}
         self._map_prev = None  # album zaznaczony przed kliknięciem „Mapa”
         self._shared_ids = set()  # id() albumów udostępnionych (tylko do odczytu)  # id -> ulubione po zmianie w tej sesji (rekord z pyicloud jest nieaktualny)
@@ -2459,12 +2495,20 @@ class MainWindow(Adw.ApplicationWindow):
         rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
         pop.set_pointing_to(rect)
         pop.set_has_arrow(False)
+        pop.add_css_class("ctx")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-        def item(label, cb):
+        def item(label, cb, icon=None):
             b = Gtk.Button()
             b.add_css_class("flat")
-            b.set_child(Gtk.Label(label=label, xalign=0))
+            row = Gtk.Box(spacing=10)
+            img = Gtk.Image.new_from_icon_name(icon or ICONS_CTX.get(label, "folder-new-symbolic"))
+            img.add_css_class("ctx-icon")
+            row.append(img)
+            row.append(Gtk.Label(label=label, xalign=0))
+            b.set_child(row)
+            if label.startswith((tr("Usuń"), tr("Usuń na zawsze…"))) and label != tr("Usuń z albumu"):
+                b.add_css_class("ctx-danger")
             b.connect("clicked", lambda *_: (pop.popdown(), cb()))
             box.append(b)
 
@@ -2954,6 +2998,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.rows_view = Gtk.ListView(model=Gtk.NoSelection(model=self.rows_store),
                                       factory=self._make_rows_factory())
         self.rows_view.set_show_separators(False)
+        self.rows_view.add_css_class("rowsview")
         self.grid = self.grid_view  # aktualnie pokazywany widok (używa go zaznaczanie ramką)
         sw = Gtk.ScrolledWindow()
         sw.set_vexpand(True)
@@ -3588,12 +3633,20 @@ class MainWindow(Adw.ApplicationWindow):
         rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
         pop.set_pointing_to(rect)
         pop.set_has_arrow(False)
+        pop.add_css_class("ctx")
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-        def item(label, cb):
+        def item(label, cb, icon=None):
             b = Gtk.Button()
             b.add_css_class("flat")
-            b.set_child(Gtk.Label(label=label, xalign=0))
+            row = Gtk.Box(spacing=10)
+            img = Gtk.Image.new_from_icon_name(icon or ICONS_CTX.get(label, "folder-new-symbolic"))
+            img.add_css_class("ctx-icon")
+            row.append(img)
+            row.append(Gtk.Label(label=label, xalign=0))
+            b.set_child(row)
+            if label.startswith((tr("Usuń"), tr("Usuń na zawsze…"))) and label != tr("Usuń z albumu"):
+                b.add_css_class("ctx-danger")
             b.connect("clicked", lambda *_: (pop.popdown(), cb()))
             box.append(b)
 

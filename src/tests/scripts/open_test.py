@@ -103,7 +103,7 @@ def labels(box):
     for c in kids(box):
         if isinstance(c, Gtk.Separator): out.append("---")
         elif isinstance(c, Gtk.Button):
-            ch=c.get_child(); out.append(ch.get_text() if isinstance(ch, Gtk.Label) else (c.get_label() or "?"))
+            ch=c.get_child(); out.append(ch.get_text() if isinstance(ch, Gtk.Label) else (next((x.get_text() for x in kids(ch) if isinstance(x, Gtk.Label)), None) if isinstance(ch, Gtk.Box) else None) or c.get_label() or "?")
     return out
 def popover_of(widget):
     pops=[c for c in kids(widget) if isinstance(c, Gtk.Popover)]
