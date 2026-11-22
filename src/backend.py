@@ -437,6 +437,14 @@ class ICloud:
         return asset.filename.lower().endswith(VIDEO_EXT)
 
     @staticmethod
+    def is_favorite(asset) -> bool:
+        try:
+            from pyicloud.services.photos_cloudkit.mappers import record_field_value
+            return bool(record_field_value(asset._asset_record, "isFavorite") or 0)
+        except Exception:  # noqa: BLE001
+            return False
+
+    @staticmethod
     def is_live(asset) -> bool:
         try:
             return bool(asset.is_live_photo)
@@ -731,6 +739,180 @@ class ICloud:
                         log.error("Apple nie potwierdziło usunięcia %s", a.filename)
         log.info("usunięto %d z %d zdjęć", len(deleted), len(assets))
         return deleted, errors
+
+    # ---------- zmiany pól zdjęć w CloudKit (1.0.0) ----------
+    def _modify_records(self, items, progress=None):
+        """items: [(asset, recordName, recordType, zone_dict, fields)]. Wysyła operacje forceUpdate
+        paczkami do 100 na strefę (bez atomic: błąd jednego rekordu nie blokuje reszty).
+        Zwraca (lista_zmienionych_zdjęć, błędy)."""
+        from pyicloud.common.cloudkit import CKZoneIDReq
+        from pyicloud.common.cloudkit.models import CKModifyOperation, CKWriteRecord, CKZoneID
+
+        client = getattr(self.api.photos, "private_client", None)
+        if client is None:
+            raise RuntimeError("brak klienta CloudKit")
+        groups = {}
+        for it in items:
+            groups.setdefault(json.dumps(it[3], sort_keys=True, default=str), (it[3], []))[1].append(it)
+        done, errors, k = [], [], 0
+        for zone, group in groups.values():
+            zid = CKZoneIDReq(zoneName=zone["zoneName"], ownerRecordName=zone.get("ownerRecordName"),
+                              zoneType=zone.get("zoneType"))
+            for i in range(0, len(group), 100):
+                chunk = group[i:i + 100]
+                by_name = {c[1]: c[0] for c in chunk}
+                ops = [CKModifyOperation(operationType="forceUpdate", record=CKWriteRecord(
+                    recordName=name, recordType=rtype, fields=fields,
+                    zoneID=CKZoneID(**{x: zone[x] for x in ("zoneName", "ownerRecordName", "zoneType")
+                                       if zone.get(x)})))
+                       for _a, name, rtype, _z, fields in chunk]
+                try:
+                    resp = client.modify(operations=ops, zone_id=zid, atomic=False)
+                except Exception as e:  # noqa: BLE001
+                    log.error("modify (%d rekordów): %r", len(ops), e)
+                    errors += [f"{getattr(a, 'filename', '?')}: {e}" for a in by_name.values()]
+                    continue
+                failed = {}
+                for rec in resp.records:
+                    code = getattr(rec, "serverErrorCode", None)
+                    if code:
+                        failed[getattr(rec, "recordName", None)] = f"{code} {getattr(rec, 'reason', '') or ''}".strip()
+                for name, a in by_name.items():
+                    if name in failed:
+                        errors.append(f"{getattr(a, 'filename', '?')}: {failed[name]}")
+                        log.error("modify %s: %s", name, failed[name])
+                    else:
+                        done.append(a)
+                k += len(chunk)
+                if progress:
+                    progress(k, len(items))
+        return done, errors
+
+    def _asset_items(self, assets, fields):
+        from pyicloud.services.photos_cloudkit.constants import PRIMARY_ZONE
+        from pyicloud.services.photos_cloudkit.mappers import record_name, record_record_type, record_zone
+
+        out = []
+        for a in assets:
+            rec = a._asset_record
+            out.append((a, record_name(rec), record_record_type(rec), record_zone(rec) or PRIMARY_ZONE, fields))
+        return out
+
+    def restore_assets(self, assets, progress=None):
+        """Przywraca zdjęcia z „Ostatnio usunięte” (isDeleted=0)."""
+        _guard_write()
+        res = self._modify_records(self._asset_items(assets, {"isDeleted": {"type": "INT64", "value": 0}}),
+                                   progress)
+        log.info("przywrócono %d z %d zdjęć", len(res[0]), len(assets))
+        return res
+
+    def purge_assets(self, assets, progress=None):
+        """Usuwa NA ZAWSZE zdjęcia, które już są w „Ostatnio usunięte” (isExpunged=1, jak iCloud.com)."""
+        _guard_write()
+        res = self._modify_records(self._asset_items(assets, {"isExpunged": {"type": "INT64", "value": 1}}),
+                                   progress)
+        log.info("usunięto na zawsze %d z %d zdjęć", len(res[0]), len(assets))
+        return res
+
+    def set_hidden(self, assets, value: bool, progress=None):
+        """Ukrywa zdjęcia (album „Ukryte”) albo je odkrywa."""
+        _guard_write()
+        return self._modify_records(
+            self._asset_items(assets, {"isHidden": {"type": "INT64", "value": 1 if value else 0}}), progress)
+
+    def remove_from_album(self, album, assets, progress=None):
+        """Usuwa zdjęcia z albumu (relacja CPLContainerRelation), samo zdjęcie zostaje w bibliotece."""
+        _guard_write()
+        rid = getattr(album, "_record_id", None)
+        zone = getattr(album, "_zone_id", None)
+        if not rid or not zone or not hasattr(album, "_relation_item_id"):
+            raise RuntimeError(tr("Z tego albumu nie można usuwać zdjęć"))
+        items = [(a, f"{album._relation_item_id(a)}-IN-{rid}", "CPLContainerRelation", dict(zone),
+                  {"isDeleted": {"type": "INT64", "value": 1}}) for a in assets]
+        res = self._modify_records(items, progress)
+        log.info("usunięto z albumu %d z %d zdjęć", len(res[0]), len(assets))
+        return res
+
+    # ---------- albumy: tworzenie, nazwa, usuwanie ----------
+    def create_album(self, name: str):
+        _guard_write()
+        name = name.strip()
+        if not name:
+            raise ValueError(tr("Podaj nazwę albumu"))
+        return self.api.photos.create_album(name)
+
+    def rename_album(self, album, name: str):
+        _guard_write()
+        name = name.strip()
+        if not name:
+            raise ValueError(tr("Podaj nazwę albumu"))
+        album.rename(name)
+        return name
+
+    def delete_album(self, album):
+        """Usuwa sam album; zdjęcia zostają w bibliotece."""
+        _guard_write()
+        return album.delete()
+
+    @staticmethod
+    def is_user_album(album) -> bool:
+        return type(album).__name__ == "PhotoAlbum" and bool(getattr(album, "_record_id", None))
+
+    # ---------- albumy udostępnione ----------
+    def shared_albums(self) -> list[tuple[str, object]]:
+        """[(nazwa, album)] albumów udostępnionych (Shared Albums). Pusta lista, gdy konto ich nie ma."""
+        try:
+            streams = self.api.photos.shared_streams
+        except Exception as e:  # noqa: BLE001
+            log.info("albumy udostępnione niedostępne: %r", e)
+            return []
+        out = []
+        for a in streams:
+            name = getattr(a, "name", "") or getattr(a, "title", "") or ""
+            if name:
+                out.append((name, a))
+        return sorted(out, key=lambda t: t[0].lower())
+
+    def geo_points(self, album, limit: int = 6000, progress=None) -> list[dict]:
+        """Zdjęcia albumu z położeniem (pola locationLatitude/Longitude z iCloud, bez pobierania plików)."""
+        import copy
+        from pyicloud.services.photos_cloudkit.mappers import record_field_value
+
+        out, k = [], 0
+        for a in self.iter_assets(copy.copy(album), True):
+            k += 1
+            if k > limit:
+                break
+            try:
+                lat = record_field_value(a._asset_record, "locationLatitude")
+                lon = record_field_value(a._asset_record, "locationLongitude")
+            except Exception:  # noqa: BLE001
+                continue
+            if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)) or (lat == 0 and lon == 0):
+                continue
+            thumb = None
+            try:
+                p, _v = self._cache_path(a, "thumb")
+                thumb = str(p) if p.exists() else None
+            except Exception:  # noqa: BLE001
+                pass
+            d = self.asset_date(a)
+            out.append({"lat": float(lat), "lon": float(lon), "name": a.filename,
+                        "date": d.strftime("%Y-%m-%d %H:%M") if d else "", "thumb": thumb})
+            if progress and k % 200 == 0:
+                progress(k, limit)
+        return out
+
+    def save_album(self, album, folder: str, progress=None, should_stop=None):
+        """Zapisuje oryginały całego albumu do folderu (istniejących plików nie nadpisuje)."""
+        import copy
+
+        assets = []
+        for a in self.iter_assets(copy.copy(album), True):
+            if should_stop and should_stop():
+                break
+            assets.append(a)
+        return self.save_originals(assets, folder, progress)
 
     def save_originals(self, assets, folder: str, progress=None):
         ok, errors = 0, []

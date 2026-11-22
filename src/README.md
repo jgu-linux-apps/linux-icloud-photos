@@ -1,6 +1,6 @@
 # Linux iCloud Photos
 
-**Current version: 0.17.10 (2026-11-21)**
+**Current version: 1.0.0 (2026-11-22)**
 
 Created by: JGu  
 Supported by Claude
@@ -76,6 +76,13 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Window transparency (Settings, slider; 0 = off, the default): the window and its panels become translucent and a strongly blurred background made from the colours of your photos shows through. The more transparent the window, the stronger that blurred layer, and panels with text always keep at least 75% opacity, so text stays readable. The app cannot blur the desktop behind the window (GTK4 on GNOME does not allow it); for a real blur of what is behind the window use an extension such as Blur my Shell, which can blur any translucent window
 - Refresh button in the header bar (also `F5` or `Ctrl+R`): fetches the album list and the photos of the current album again (for example after adding photos on your phone), keeps the album you were in and forgets the cached album covers so they are downloaded again
 - Delete photos (selection bar, right-click menu, viewer button or the `Delete` key): they go to "Recently Deleted" in iCloud (like the Photos app), after a confirmation, and disappear from your other devices. The app asks Apple to confirm each deletion before it removes the photo from the view.
+- Recently Deleted (Media types → Recently Deleted): select photos and choose "Restore" to bring them back to the library, or "Delete forever…" (with a confirmation) to remove them from iCloud for good. Both are also in the right-click menu
+- Hide photos (eye button in the selection bar or "Hide" in the right-click menu); in the "Hidden" album the button is "Unhide"
+- Album management: "New album…" under "My albums" (and in the right-click menu of the album list), right-click an own album to "Rename…" or "Delete album…" (only the album is deleted, the photos stay), and "Remove from album" in the selection bar or right-click menu removes photos from the current album without deleting them
+- Shared albums: a "Shared albums (N)" section in the left menu lists the iCloud Shared Albums you own or were invited to; they can be viewed, played, cast and saved, but not changed from this app
+- Save a whole album: right-click an album in the left menu → "Save the whole album to a folder…" (a subfolder with the album name; existing files are not overwritten)
+- Map: right-click an album → "Show photos on a map" opens an OpenStreetMap page in the browser with a pin for every photo that has a location (grouped when zoomed out, with the thumbnail, file name and date). Locations come from iCloud, no photo files are downloaded; the page loads the map tiles and the Leaflet library from the internet
+- Viewer shortcuts and buttons: `S` (or the star button) adds to or removes from favourites, `R` / `Shift+R` (or the rotate button) rotates the photo in the viewer only (the photo in iCloud is not changed), `I` shows information
 - The pinned library versions (pyicloud, keyring, PyChromecast, pyatv) are the ones the app was tested with; the app warns if the installed pyicloud differs
 - Picker mode for other apps (`--pick`): `linux-icloud-photos --pick --pick-out result.json --pick-dir DIR [--pick-max 30]` opens the app with a read-only library (no delete, favourite, album or upload actions). You select photos and videos and click "Choose"; they are exported to DIR (JPEG/PNG/GIF unchanged, HEIC converted to JPEG, videos as H.264, Live Photos as a still photo) and listed in the JSON file. Exit code 0 = files chosen, 1 = cancelled. linux-whazzapp uses it for "Photos & videos" in the WhatsApp attach menu
 - Links from other apps: `linux-icloud-photos --open-album "NAME"` opens an album, `--open-date 2025-02-14..2025-02-28` jumps to those days in All Photos. If the app is already open, the request goes to the open window. linux-skytrack uses it for "Open album" and "Photos from the trip days"
@@ -173,6 +180,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
+- 1.0.0: Recently Deleted with "Restore" and "Delete forever"; hide and unhide photos; create, rename and delete albums and remove photos from an album; Shared Albums section (view only); save a whole album to a folder; map of an album's photos (OpenStreetMap in the browser); viewer shortcuts `S` (favourite) and `R` (rotate in the viewer). New backend test for these operations.
 - 0.17.10: Deleting photos is confirmed again: the CloudKit record lookup is called with keyword arguments, as pyicloud 2026.10.1 requires (before, the confirmation failed with a TypeError although the photo was deleted).
 - 0.17.9: Apple can keep answering the library indexing check with “FAILED” while iCloud.com shows the photos normally; the app now ignores that state (and logs it) instead of refusing to load the albums.
 - 0.17.8: The library indexing check logs what Apple returned and, when the new CloudKit client does not read “FINISHED”, asks again with the plain REST query (iCloud.com showed the photos while the app reported “not finished indexing”).

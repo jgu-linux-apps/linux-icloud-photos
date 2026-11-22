@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT)); os.chdir(ROOT)
 import i18n
 PLCH = re.compile(r"[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]")
-files = ["app.py", "backend.py", "cast.py", "cast_gc.py", "airplay.py", "exif.py", "pick.py"]
+files = ["app.py", "backend.py", "map_page.py", "cast.py", "cast_gc.py", "airplay.py", "exif.py", "pick.py"]
 used, problems = {}, []
 def is_log(a):
     return isinstance(a, ast.Call) and isinstance(a.func, ast.Attribute) and isinstance(a.func.value, ast.Name) and a.func.value.id == 'log'

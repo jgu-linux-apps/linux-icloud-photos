@@ -1,0 +1,23 @@
+{
+ "lines": [
+  "restore -> (['id0', 'id1', 'id2'], [], ('forceUpdate', 'CPLAsset', 'id0', 'PrimarySync', {'isDeleted': 0}), [False])",
+  "purge_one_conflict -> (['id0', 'id2'], ['IMG_1.HEIC: CONFLICT oops'], {'isExpunged': 1})",
+  "hide_unhide -> ({'isHidden': 1}, {'isHidden': 0}, ['id0'], ['id0'])",
+  "remove_from_album -> ([('forceUpdate', 'CPLContainerRelation', 'A0-IN-ALB1'), ('forceUpdate', 'CPLContainerRelation', 'A1-IN-ALB1')], {'isDeleted': 1}, ['id0', 'id1'])",
+  "remove_from_smart_album -> EXC RuntimeError: Z tego albumu nie można usuwać zdjęć",
+  "modify_network_error -> ([], 3)",
+  "batches_and_zones -> (251, 4, ['PrimarySync', 'SharedSync-1'], (251, 251))",
+  "create_album -> ('PhotoAlbum', ['Nowy'])",
+  "create_album_empty -> EXC ValueError: Podaj nazwę albumu",
+  "rename_album -> ('Lato', 'Lato')",
+  "delete_album -> (True, True)",
+  "is_user_album -> (True, False)",
+  "shared_sorted -> ['ania', 'Rodzina']",
+  "shared_unavailable -> []",
+  "geo_points -> [('IMG_1.HEIC', 50.06, 19.0, None), ('IMG_3.HEIC', 0.0, 19.0, None)]",
+  "read_only_guard -> EXC PermissionError: Tryb wyboru: biblioteka jest tylko do odczytu",
+  "map_page -> (True, True, True)"
+ ],
+ "runs": 2,
+ "dropped_unstable": 0
+}

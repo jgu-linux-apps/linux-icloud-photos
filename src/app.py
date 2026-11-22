@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -233,6 +234,18 @@ def blur_texture(tex, size=(24, 16)):
     return Gdk.Texture.new_for_pixbuf(pb.scale_simple(size[0], size[1], GdkPixbuf.InterpType.BILINEAR))
 
 
+def rotate_texture(tex, deg):
+    """Obrót tekstury o 90/180/270° zgodnie z ruchem wskazówek zegara."""
+    d = Gdk.TextureDownloader.new(tex)
+    d.set_format(Gdk.MemoryFormat.R8G8B8A8)
+    data, stride = d.download_bytes()
+    pb = GdkPixbuf.Pixbuf.new_from_bytes(data, GdkPixbuf.Colorspace.RGB, True, 8,
+                                         tex.get_width(), tex.get_height(), stride)
+    rot = {90: GdkPixbuf.PixbufRotation.CLOCKWISE, 180: GdkPixbuf.PixbufRotation.UPSIDEDOWN,
+           270: GdkPixbuf.PixbufRotation.COUNTERCLOCKWISE}[deg % 360]
+    return Gdk.Texture.new_for_pixbuf(pb.rotate_simple(rot))
+
+
 class Backdrop(Gtk.Widget):
     """Tło okna w trybie przezroczystości: rozmyte kolory bieżącego albumu pod półprzezroczystym interfejsem."""
 
@@ -341,6 +354,8 @@ class ZoomView(Gtk.ScrolledWindow):
         self.on_zoom = on_zoom
         self.zoom = 1.0
         self.aspect = 0.0
+        self.rot = 0          # obrót tylko w podglądzie (0/90/180/270), nie zapisuje się w iCloud
+        self._src = None
         self._mx = self._my = 0.0
         self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
         self.set_hexpand(True)
@@ -396,12 +411,27 @@ class ZoomView(Gtk.ScrolledWindow):
         if tex is None:
             self.pic.set_paintable(None)
             self.aspect = 0.0
+            self._src = None
             self.set_zoom(1.0)
             return
+        self._src = tex
+        if not keep_zoom:
+            self.rot = 0  # inne zdjęcie: bez obrotu; ten sam obraz w lepszej jakości: obrót zostaje
+        elif self.rot:
+            tex = rotate_texture(tex, self.rot)
         self.aspect = tex.get_width() / max(1, tex.get_height())
         self.pic.set_paintable(tex)
         if not keep_zoom:
             self.set_zoom(1.0)
+
+    def rotate(self, deg=90):
+        if self._src is None:
+            return
+        self.rot = (self.rot + deg) % 360
+        tex = rotate_texture(self._src, self.rot) if self.rot else self._src
+        self.aspect = tex.get_width() / max(1, tex.get_height())
+        self.pic.set_paintable(tex)
+        self.set_zoom(1.0)
 
     def _fit_size(self):
         vw, vh = self.get_width(), self.get_height()
@@ -565,6 +595,18 @@ class Viewer(Gtk.Window):
         self.album_pop.connect("show", lambda *_: self._rebuild_album_menu())
         self.album_btn.set_popover(self.album_pop)
 
+        self.rot_btn = Gtk.Button(icon_name="object-rotate-right-symbolic")
+        self.rot_btn.add_css_class("osd")
+        self.rot_btn.add_css_class("circular")
+        self.rot_btn.set_tooltip_text(tr("Obróć w podglądzie (R) - nie zmienia zdjęcia w iCloud"))
+        self.rot_btn.connect("clicked", lambda *_: self.zv.rotate(90))
+
+        self.fav_btn = Gtk.Button(icon_name="non-starred-symbolic")
+        self.fav_btn.add_css_class("osd")
+        self.fav_btn.add_css_class("circular")
+        self.fav_btn.set_tooltip_text(tr("Ulubione (S)"))
+        self.fav_btn.connect("clicked", lambda *_: self._toggle_fav())
+
         self.trash_btn = Gtk.Button(icon_name="user-trash-symbolic")
         self.trash_btn.add_css_class("osd")
         self.trash_btn.add_css_class("circular")
@@ -581,7 +623,8 @@ class Viewer(Gtk.Window):
         self.show_btn.add_css_class("circular")
         self.show_btn.set_tooltip_text(tr("Pokaz slajdów od tego zdjęcia"))
         self.show_btn.connect("clicked", lambda *_: self._start_slideshow_here())
-        for w in (self.live_btn, self.show_btn, self.album_btn, self.trash_btn, self.info_btn):
+        for w in (self.live_btn, self.show_btn, self.rot_btn, self.fav_btn, self.album_btn,
+                  self.trash_btn, self.info_btn):
             topbar.append(w)
 
         ov = Gtk.Overlay()
@@ -642,6 +685,10 @@ class Viewer(Gtk.Window):
             self._delete_current()
         elif keyval in (Gdk.KEY_a, Gdk.KEY_A):
             self.album_btn.popup()
+        elif keyval in (Gdk.KEY_r, Gdk.KEY_R) and not on_video:
+            self.zv.rotate(-90 if _state & Gdk.ModifierType.SHIFT_MASK else 90)
+        elif keyval in (Gdk.KEY_s, Gdk.KEY_S):
+            self._toggle_fav()
         elif keyval in (Gdk.KEY_i, Gdk.KEY_I):
             self.win.show_info(self.store.get_item(self.index))
         elif keyval in (Gdk.KEY_m, Gdk.KEY_M):
@@ -666,6 +713,41 @@ class Viewer(Gtk.Window):
             return
         Slideshow(self.win, self.index).present()
         self.close()
+
+    def _fav_state(self, asset):
+        a_id = asset.id
+        if a_id in self.win.fav_override:
+            return self.win.fav_override[a_id]
+        return ICloud.is_favorite(asset)
+
+    def _update_fav_btn(self):
+        if self.store.get_n_items() == 0:
+            return
+        on = self._fav_state(self.store.get_item(self.index).asset)
+        self.fav_btn.set_icon_name("starred-symbolic" if on else "non-starred-symbolic")
+        self.fav_btn.set_tooltip_text(tr("Usuń z ulubionych (S)") if on else tr("Dodaj do ulubionych (S)"))
+
+    def _toggle_fav(self):
+        if self.store.get_n_items() == 0 or PICK is not None:
+            return
+        if self.win._in_shared() or self.win._in_trash():
+            self.win.toast(tr("Album udostępniony jest tu tylko do przeglądania") if self.win._in_shared()
+                           else tr("Tutaj użyj „Usuń na zawsze” albo „Przywróć” w pasku zaznaczenia"))
+            return
+        a = self.store.get_item(self.index).asset
+        value = not self._fav_state(a)
+
+        def done(res, err):
+            ok = res[0] if res else 0
+            if ok:
+                self.win.fav_override[a.id] = value
+                self.win.toast(tr("Dodano do ulubionych") if value else tr("Usunięto z ulubionych"))
+            else:
+                self.win.toast(tr("Nie udało się zmienić ulubionych: {0}").format(
+                    err or (res[1][0] if res and res[1] else "")))
+            self._update_fav_btn()
+
+        bg(lambda: self.win.icloud.set_favorite([a], value), done)
 
     def _delete_current(self):
         if self.store.get_n_items() == 0:
@@ -731,6 +813,7 @@ class Viewer(Gtk.Window):
         self._extra = ""
         obj = self.store.get_item(self.index)
         self._cur_id = obj.asset.id
+        self._update_fav_btn()
         self.trash_btn.set_visible(not self.win._in_trash())
         self.win.last_obj = obj
         self.live_btn.set_visible(obj.is_live)
@@ -1810,6 +1893,8 @@ class MainWindow(Adw.ApplicationWindow):
         self._jump_q = None
         self.select_mode = False
         self.selected = []
+        self.fav_override = {}
+        self._shared_ids = set()  # id() albumów udostępnionych (tylko do odczytu)  # id -> ulubione po zmianie w tej sesji (rekord z pyicloud jest nieaktualny)
         self._rb = None
         self.cache_gb = float(cfg.get("cache_gb", 1.0))
         self._version_warned = False
@@ -2124,6 +2209,10 @@ class MainWindow(Adw.ApplicationWindow):
         lb.add_css_class("navigation-sidebar")
         lb.set_filter_func(self._row_filter)
         lb.connect("row-selected", self._on_album_selected)
+        rc = Gtk.GestureClick()
+        rc.set_button(3)
+        rc.connect("pressed", lambda g, n, x, y, lb=lb: self._album_context(lb, x, y))
+        lb.add_controller(rc)
         self.lists.append(lb)
         return lb
 
@@ -2171,6 +2260,26 @@ class MainWindow(Adw.ApplicationWindow):
         self.exp_user.set_margin_start(8)
         self.exp_user.set_visible(False)
         side.append(self.exp_user)
+        self.new_album_btn = Gtk.Button()
+        nb = Gtk.Box(spacing=8)
+        nb.append(Gtk.Image.new_from_icon_name("list-add-symbolic"))
+        nb.append(Gtk.Label(label=tr("Nowy album…"), xalign=0))
+        self.new_album_btn.set_child(nb)
+        self.new_album_btn.add_css_class("flat")
+        self.new_album_btn.set_margin_start(14)
+        self.new_album_btn.set_margin_end(8)
+        self.new_album_btn.set_halign(Gtk.Align.START)
+        self.new_album_btn.set_visible(False)
+        self.new_album_btn.connect("clicked", lambda *_: self.new_album())
+        side.append(self.new_album_btn)
+        self.list_shared = self._make_list()
+        self.exp_shared = Gtk.Expander()
+        self.exp_shared_lbl = self._bold_label(tr("Udostępnione albumy"))
+        self.exp_shared.set_label_widget(self.exp_shared_lbl)
+        self.exp_shared.set_child(self.list_shared)
+        self.exp_shared.set_margin_start(8)
+        self.exp_shared.set_visible(False)
+        side.append(self.exp_shared)
 
         scroller = Gtk.ScrolledWindow()
         scroller.set_child(side)
@@ -2236,6 +2345,210 @@ class MainWindow(Adw.ApplicationWindow):
         if entry.get_text().strip():
             self.exp_more.set_expanded(True)
             self.exp_user.set_expanded(True)
+            self.exp_shared.set_expanded(True)
+
+    def _shared_loaded(self, gen, shared, err):
+        if err or not shared or self._expired:
+            return
+        child = self.list_shared.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            self.list_shared.remove(child)
+            child = nxt
+        self._shared_ids = {id(a) for _n, a in shared}
+        for name, album in shared:
+            self.list_shared.append(AlbumRow(name, "emblem-shared-symbolic", album, key="shared:" + name))
+        self.exp_shared_lbl.set_text(tr("Udostępnione albumy ({0})").format(len(shared)))
+        self.exp_shared.set_visible(True)
+
+    # --- zarządzanie albumami (menu prawego przycisku na liście albumów) ---
+    def _album_context(self, lb, x, y):
+        row = lb.get_row_at_y(int(y))
+        if row is None or row.album is None or getattr(row, "key", "") == "__jump__":
+            return
+        pop = Gtk.Popover()
+        pop.set_parent(lb)
+        rect = Gdk.Rectangle()
+        rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
+        pop.set_pointing_to(rect)
+        pop.set_has_arrow(False)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        def item(label, cb):
+            b = Gtk.Button()
+            b.add_css_class("flat")
+            b.set_child(Gtk.Label(label=label, xalign=0))
+            b.connect("clicked", lambda *_: (pop.popdown(), cb()))
+            box.append(b)
+
+        item(tr("Zapisz cały album do folderu…"), lambda: self.save_album(row))
+        item(tr("Pokaż zdjęcia na mapie"), lambda: self.show_map(row))
+        if PICK is None and lb is self.list_user and ICloud.is_user_album(row.album):
+            box.append(Gtk.Separator())
+            item(tr("Zmień nazwę…"), lambda: self.rename_album(row))
+            item(tr("Usuń album…"), lambda: self.delete_album(row))
+        if PICK is None:
+            box.append(Gtk.Separator())
+            item(tr("Nowy album…"), self.new_album)
+        pop.set_child(box)
+        pop.connect("closed", lambda p: GLib.idle_add(lambda: (p.unparent(), False)[1]))
+        pop.popup()
+
+    def ask_text(self, title, initial, ok_label, cb, detail=None):
+        """Małe okno z polem tekstowym; cb(tekst) po „OK” albo Enter."""
+        dlg = Gtk.Window(transient_for=self, modal=True, title=title, resizable=False)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        for m in ("top", "bottom", "start", "end"):
+            getattr(box, f"set_margin_{m}")(18)
+        if detail:
+            d = Gtk.Label(label=detail, xalign=0, wrap=True)
+            d.set_max_width_chars(40)
+            box.append(d)
+        entry = Gtk.Entry(text=initial or "")
+        entry.set_width_chars(32)
+        box.append(entry)
+        btns = Gtk.Box(spacing=8, halign=Gtk.Align.END)
+        cancel = Gtk.Button(label=tr("Anuluj"))
+        ok = Gtk.Button(label=ok_label)
+        ok.add_css_class("suggested-action")
+        btns.append(cancel)
+        btns.append(ok)
+        box.append(btns)
+        dlg.set_child(box)
+
+        def accept(*_):
+            text = entry.get_text().strip()
+            if not text:
+                return
+            dlg.close()
+            cb(text)
+
+        ok.connect("clicked", accept)
+        entry.connect("activate", accept)
+        cancel.connect("clicked", lambda *_: dlg.close())
+        dlg.present()
+        entry.grab_focus()
+
+    def _reload_albums(self, keep=None):
+        """Po zmianie listy albumów: wczytaj ją od nowa i wróć do wskazanego albumu."""
+        self._keep_key = keep or self._selected_album_key()
+        self._albums_ready = False
+
+        def done(albums, err):
+            self._clear_albums()
+            self._albums_loaded(albums, err)
+
+        def work():
+            self.icloud.refresh_library()
+            return self.icloud.albums()
+
+        bg(work, done)
+
+    def new_album(self, then=None):
+        def create(name):
+            def done(album, err):
+                if err:
+                    self.toast(tr("Nie udało się utworzyć albumu: {0}").format(err))
+                    return
+                self.toast(tr("Utworzono album „{0}”").format(name))
+                if then:
+                    then(album)
+                self._reload_albums(keep=name)
+            bg(lambda: self.icloud.create_album(name), done)
+
+        self.ask_text(tr("Nowy album"), "", tr("Utwórz"), create)
+
+    def rename_album(self, row):
+        old = row.title
+
+        def rename(name):
+            if name == old:
+                return
+
+            def done(_r, err):
+                if err:
+                    self.toast(tr("Nie udało się zmienić nazwy: {0}").format(err))
+                    return
+                self.toast(tr("Zmieniono nazwę na „{0}”").format(name))
+                if self.cur_album is row.album:
+                    self.cur_title = name
+                    self.wtitle.set_title(name)
+                self._reload_albums(keep=name if self.cur_album is row.album else None)
+            bg(lambda: self.icloud.rename_album(row.album, name), done)
+
+        self.ask_text(tr("Zmień nazwę albumu"), old, tr("Zmień nazwę"), rename)
+
+    def delete_album(self, row):
+        dlg = Gtk.AlertDialog()
+        dlg.set_message(tr("Usunąć album „{0}”?").format(row.title))
+        dlg.set_detail(tr("Usuwany jest tylko album. Zdjęcia zostają w bibliotece i w innych albumach."))
+        dlg.set_buttons([tr("Anuluj"), tr("Usuń album")])
+        dlg.set_cancel_button(0)
+        dlg.set_default_button(0)
+
+        def chosen(d, res):
+            try:
+                if d.choose_finish(res) != 1:
+                    return
+            except GLib.Error:
+                return
+
+            def done(_r, err):
+                if err:
+                    self.toast(tr("Nie udało się usunąć albumu: {0}").format(err))
+                    return
+                self.toast(tr("Usunięto album „{0}”").format(row.title))
+                was_open = self.cur_album is row.album
+                self._reload_albums(keep=None if was_open else self.cur_title)
+            bg(lambda: self.icloud.delete_album(row.album), done)
+
+        dlg.choose(self, None, chosen)
+
+    def show_map(self, row):
+        """Mapa zdjęć albumu z położeniem: strona HTML (OpenStreetMap) w przeglądarce."""
+        self.toast(tr("Szukam zdjęć z lokalizacją w „{0}”…").format(row.title))
+
+        def done(points, err):
+            if err:
+                self.toast(tr("Nie udało się przygotować mapy: {0}").format(err))
+                return
+            if not points:
+                self.toast(tr("W tym albumie nie ma zdjęć z lokalizacją"))
+                return
+            import map_page
+            page = CACHE_DIR / "map.html"
+            page.write_text(map_page.build(row.title, points, {"count": tr("zdjęć na mapie: {0}")}),
+                            encoding="utf-8")
+            Gtk.UriLauncher.new(page.as_uri()).launch(self, None, None)
+            self.toast(tr("Mapa otwarta w przeglądarce ({0} zdjęć)").format(len(points)))
+
+        bg(lambda: self.icloud.geo_points(row.album), done)
+
+    def save_album(self, row):
+        dlg = Gtk.FileDialog()
+        dlg.set_title(tr("Wybierz folder na album „{0}”").format(row.title))
+
+        def chosen(d, res):
+            try:
+                folder = d.select_folder_finish(res).get_path()
+            except GLib.Error:
+                return
+            target = os.path.join(folder, re.sub(r'[\\/:*?"<>|]+', "_", row.title).strip() or "album")
+            os.makedirs(target, exist_ok=True)
+            self.toast(tr("Zapisuję album „{0}”…").format(row.title))
+
+            def progress(k, n):
+                GLib.idle_add(lambda: (self.count.set_text(
+                    tr("Zapis albumu {0}/{1}…").format(k, n)), False)[1])
+
+            def done(r, err):
+                ok, errors = r if r else (0, [str(err)])
+                self._update_count()
+                self.toast(tr("Zapisano album: {0} plików w {1}").format(ok, target)
+                           + (tr(" (błędy: {0}, log)").format(len(errors)) if errors else ""))
+            bg(lambda: self.icloud.save_album(row.album, target, progress), done)
+
+        dlg.select_folder(self, None, chosen)
 
     def _albums_loaded(self, albums, err):
         if err:
@@ -2290,6 +2603,10 @@ class MainWindow(Adw.ApplicationWindow):
             cover_rows.append(row)
         self.exp_user_lbl.set_text(tr("Moje albumy ({0})").format(len(users)))
         self.exp_user.set_visible(bool(users))
+        self.new_album_btn.set_visible(PICK is None)
+        gen_s = self.gen
+        if hasattr(self.icloud, "shared_albums"):
+            bg(self.icloud.shared_albums, lambda sh, e: self._shared_loaded(gen_s, sh, e))
         keep, self._keep_key = self._keep_key, None
         target = self._find_row(keep) if keep else None
         first = target or self.list_primary.get_row_at_index(0)
@@ -2700,6 +3017,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.wtitle.set_subtitle("")
         self.store.remove_all()
         self.selected = []
+        self._update_sel_buttons()
         self._refresh_selection()
         self.count.set_text(tr("Szukam daty…") if jump is not None else "…")
         bg(lambda: self.icloud.total(album), lambda t, e: self._set_total(gen, t))
@@ -3065,9 +3383,19 @@ class MainWindow(Adw.ApplicationWindow):
         item(tr("Zapisz oryginał jako…"), lambda: self.save_original(obj))
         item(tr("Kopiuj nazwę pliku"), lambda: (
             self.get_clipboard().set(obj.asset.filename), self.toast(tr("Skopiowano nazwę pliku"))))
-        if not self._in_trash():
+        if PICK is None and not self._in_shared():
             box.append(Gtk.Separator())
-            item(tr("Usuń…"), lambda: self.confirm_delete(targets()))
+            if self._in_trash():
+                item(tr("Przywróć"), lambda: self._sel_restore(targets()))
+                item(tr("Usuń na zawsze…"), lambda: self._sel_purge(targets()))
+            else:
+                if self._in_hidden():
+                    item(tr("Odkryj"), lambda: self._sel_hidden(False, targets()))
+                else:
+                    item(tr("Ukryj"), lambda: self._sel_hidden(True, targets()))
+                if self._in_user_album():
+                    item(tr("Usuń z albumu"), lambda: self._sel_remove_from_album(targets()))
+                item(tr("Usuń…"), lambda: self.confirm_delete(targets()))
         pop.set_child(box)
         pop.connect("closed", lambda p: GLib.idle_add(lambda: (p.unparent(), False)[1]))
         pop.popup()
@@ -3210,7 +3538,11 @@ class MainWindow(Adw.ApplicationWindow):
         self.toast(tr("Biblioteka odświeżona"))
 
     def _clear_albums(self):
-        for lb in (self.list_primary, self.list_more, self.list_user):
+        self._shared_ids = set()
+        for w in ("new_album_btn", "exp_shared"):
+            if hasattr(self, w):
+                getattr(self, w).set_visible(False)
+        for lb in (self.list_primary, self.list_more, self.list_user, self.list_shared):
             child = lb.get_first_child()
             while child is not None:
                 nxt = child.get_next_sibling()
@@ -3372,12 +3704,29 @@ class MainWindow(Adw.ApplicationWindow):
         self.del_btn.add_css_class("destructive-action")
         self.del_btn.set_sensitive(False)
         bar.pack_end(self.del_btn)
+        # „Ostatnio usunięte”: przywracanie i usuwanie na zawsze
+        self.purge_btn = button(tr("Usuń na zawsze…"), self._sel_purge)
+        self.purge_btn.add_css_class("destructive-action")
+        bar.pack_end(self.purge_btn)
+        self.restore_btn = button(tr("Przywróć"), self._sel_restore)
+        self.restore_btn.add_css_class("suggested-action")
+        bar.pack_end(self.restore_btn)
         bar.pack_end(button(tr("Zapisz oryginały…"), self._sel_save))
-        bar.pack_end(button("", lambda: self._sel_fav(False), "non-starred-symbolic",
-                            tr("Usuń z ulubionych")))
-        bar.pack_end(button("", lambda: self._sel_fav(True), "starred-symbolic",
-                            tr("Dodaj do ulubionych")))
-        bar.pack_end(button(tr("Do albumu…"), self._sel_album))
+        self.unhide_btn = button(tr("Odkryj"), lambda: self._sel_hidden(False))
+        bar.pack_end(self.unhide_btn)
+        self.hide_btn = button("", lambda: self._sel_hidden(True), "view-conceal-symbolic",
+                               tr("Ukryj (album „Ukryte”)"))
+        bar.pack_end(self.hide_btn)
+        self.unfav_btn = button("", lambda: self._sel_fav(False), "non-starred-symbolic",
+                                tr("Usuń z ulubionych"))
+        bar.pack_end(self.unfav_btn)
+        self.fav_sel_btn = button("", lambda: self._sel_fav(True), "starred-symbolic",
+                                  tr("Dodaj do ulubionych"))
+        bar.pack_end(self.fav_sel_btn)
+        self.rm_album_btn = button(tr("Usuń z albumu"), self._sel_remove_from_album)
+        bar.pack_end(self.rm_album_btn)
+        self.album_sel_btn = button(tr("Do albumu…"), self._sel_album)
+        bar.pack_end(self.album_sel_btn)
         self.sel_revealer = Gtk.Revealer()
         self.sel_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
         self.sel_revealer.set_child(bar)
@@ -3603,6 +3952,9 @@ class MainWindow(Adw.ApplicationWindow):
 
         def done(res, err):
             ok, errors = res if res else (0, [str(err)])
+            if ok:
+                for a in assets:
+                    self.fav_override[a.id] = value
             msg = (tr("Dodano do ulubionych: {0} z {1}") if value
                    else tr("Usunięto z ulubionych: {0} z {1}")).format(ok, len(assets))
             self.toast(msg
@@ -3659,6 +4011,8 @@ class MainWindow(Adw.ApplicationWindow):
 
     def album_menu_entries(self, get_assets):
         """Pozycje menu „Dodaj do albumu”: do 3 ostatnich albumów + wybór innego."""
+        if self._in_shared() or self._in_trash():
+            return []
         assets = get_assets()
         n = len(assets)
         word = plural(n, ("zdjęcie", "zdjęcia", "zdjęć"), ("photo", "photos"),
@@ -3751,6 +4105,103 @@ class MainWindow(Adw.ApplicationWindow):
     def _in_trash(self):
         return self.cur_title == tr("Ostatnio usunięte")
 
+    def _in_hidden(self):
+        return self.cur_title == tr("Ukryte")
+
+    def _in_shared(self):
+        return self.cur_album is not None and id(self.cur_album) in self._shared_ids
+
+    def _in_user_album(self):
+        return self.cur_album is not None and ICloud.is_user_album(self.cur_album)
+
+    def _update_sel_buttons(self):
+        """Przyciski paska zaznaczenia zależą od albumu: kosz, ukryte, udostępniony, własny, inne."""
+        if PICK is not None or not hasattr(self, "restore_btn"):
+            return
+        trash, hidden, shared = self._in_trash(), self._in_hidden(), self._in_shared()
+        normal = not (trash or shared)
+        for w in (self.album_sel_btn, self.fav_sel_btn, self.unfav_btn, self.del_btn):
+            w.set_visible(normal)
+        self.hide_btn.set_visible(normal and not hidden)
+        self.unhide_btn.set_visible(hidden)
+        self.rm_album_btn.set_visible(normal and self._in_user_album())
+        self.restore_btn.set_visible(trash)
+        self.purge_btn.set_visible(trash)
+
+    def _drop_from_view(self, ids):
+        """Usuwa z siatki (i z zaznaczenia) zdjęcia, których już nie ma w bieżącym albumie."""
+        if not ids:
+            return
+        for i in range(self.store.get_n_items() - 1, -1, -1):
+            if self.store.get_item(i).asset.id in ids:
+                self.store.remove(i)
+        self.selected = [o for o in self.selected if o.asset.id not in ids]
+        if self.total:
+            self.total = max(0, self.total - len(ids))
+        self._update_count()
+        for v in list(self.viewers):
+            if v.get_visible():
+                v.after_delete(ids)
+
+    def _run_bulk(self, assets, work, label, ok_msg, drop=True):
+        """Wspólne wykonanie akcji na zaznaczonych zdjęciach: postęp w pasku, toast z wynikiem,
+        zdjęcia, które zniknęły z albumu, znikają z widoku."""
+        def done(res, err):
+            changed, errors = res if res else ([], [str(err)])
+            if drop:
+                self._drop_from_view({a.id for a in changed})
+            self._refresh_selection()
+            msg = ok_msg.format(len(changed), len(assets))
+            if errors:
+                log.error("%s: %s", label, errors)
+                msg += tr(", błąd: {0}").format(str(errors[0])[:110])
+            self.toast(msg)
+
+        bg(lambda: work(self._sel_progress(label)), done)
+
+    def _sel_restore(self, assets=None):
+        assets = assets or self._sel_assets()
+        if assets:
+            self._run_bulk(assets, lambda p: self.icloud.restore_assets(assets, p), tr("Przywracanie"),
+                           tr("Przywrócono do biblioteki: {0} z {1}"))
+
+    def _sel_purge(self, assets=None):
+        assets = assets or self._sel_assets()
+        if not assets:
+            return
+        n = len(assets)
+        dlg = Gtk.AlertDialog()
+        dlg.set_message(tr("Usunąć na zawsze?") if n == 1 else tr("Usunąć na zawsze zaznaczone zdjęcia ({0})?").format(n))
+        dlg.set_detail(tr("Zdjęcia znikną z iCloud na wszystkich Twoich urządzeniach. Tego nie da się cofnąć."))
+        dlg.set_buttons([tr("Anuluj"), tr("Usuń na zawsze")])
+        dlg.set_cancel_button(0)
+        dlg.set_default_button(0)
+
+        def chosen(d, res):
+            try:
+                if d.choose_finish(res) != 1:
+                    return
+            except GLib.Error:
+                return
+            self._run_bulk(assets, lambda p: self.icloud.purge_assets(assets, p), tr("Usuwanie"),
+                           tr("Usunięto na zawsze: {0} z {1}"))
+
+        dlg.choose(self, None, chosen)
+
+    def _sel_hidden(self, value, assets=None):
+        assets = assets or self._sel_assets()
+        if assets:
+            self._run_bulk(assets, lambda p: self.icloud.set_hidden(assets, value, p), tr("Zmiana"),
+                           tr("Ukryto: {0} z {1}") if value else tr("Odkryto: {0} z {1}"))
+
+    def _sel_remove_from_album(self, assets=None):
+        assets = assets or self._sel_assets()
+        album = self.cur_album
+        if assets and album is not None:
+            self._run_bulk(assets, lambda p: self.icloud.remove_from_album(album, assets, p),
+                           tr("Usuwanie z albumu"),
+                           tr("Usunięto z albumu: {0} z {1}"))
+
     def _sel_delete(self):
         if PICK is not None:
             return
@@ -3762,8 +4213,11 @@ class MainWindow(Adw.ApplicationWindow):
         """Pyta o potwierdzenie (domyślnie „Anuluj”) i dopiero wtedy usuwa."""
         if not assets:
             return
+        if self._in_shared():
+            self.toast(tr("Album udostępniony jest tu tylko do przeglądania"))
+            return
         if self._in_trash():
-            self.toast(tr("W albumie „Ostatnio usunięte” nie można usuwać zdjęć tutaj"))
+            self.toast(tr("Tutaj użyj „Usuń na zawsze” albo „Przywróć” w pasku zaznaczenia"))
             return
         n = len(assets)
         dlg = Gtk.AlertDialog()
@@ -3771,8 +4225,8 @@ class MainWindow(Adw.ApplicationWindow):
                         else tr("Usunąć zaznaczone zdjęcia ({0})?").format(n))
         dlg.set_detail(tr("Zdjęcia zostaną przeniesione do albumu „Ostatnio usunięte” w iCloud "
                           "(Apple zwykle przechowuje je tam 30 dni) i znikną z biblioteki na "
-                          "wszystkich Twoich urządzeniach. Ta aplikacja nie ma przycisku "
-                          "przywracania - zrobisz to w aplikacji Zdjęcia lub na iCloud.com."))
+                          "wszystkich Twoich urządzeniach. Przywrócisz je w albumie „Ostatnio usunięte” "
+                          "(Typy mediów → Ostatnio usunięte → zaznacz → Przywróć)."))
         dlg.set_buttons([tr("Anuluj"), tr("Usuń")])
         dlg.set_cancel_button(0)
         dlg.set_default_button(0)
