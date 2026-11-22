@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 # słowa w tytułach artykułów: atrakcje (wyżej) i instytucje/ulice (niżej) - pl, en, de, uk
 PLACES_GOOD_RE = r"(kości|katedr|bazylik|zamek|zamk|pałac|dwór|muze|pomnik|brama|baszt|wież|ratusz|park|ogród|teatr|kaplic|klasztor|opactw|twierdz|fort|latarn|plaż|molo|rynek|stare miasto|zabyt|church|cathedral|basilica|castle|palace|museum|monument|gate|tower|town hall|garden|theatre|chapel|abbey|monastery|fortress|lighthouse|beach|pier|square|old town|kirche|burg|schloss|denkmal|turm|rathaus|garten|kloster|leuchtturm|strand|altstadt|церкв|собор|замок|палац|музе|пам.ятник|брам|вежа|ратуш|парк|сад|театр|монастир|фортец|маяк|пляж)"
 PLACES_BAD_RE = r"(akademi|uniwersytet|politechnik|wydział|szkoła|liceum|związek|stowarzysz|spółka|przedsiębior|stacja kolej|przystan|ulica|osiedle|dzielnic|parafia|university|faculty|school|association|company|station|street|district|parish|universität|schule|verein|gesellschaft|bahnhof|straße|університет|школа|асоціац|компан|станці|вулиц)"
+PLACES_VILLAGE_RE = r"(wieś w|osada w|\(województwo|\(gmina|voivodeship\)|kolej|railway|bahn |залізниц|sołectw|gmina |dzielnica |osiedle |village|hamlet|municipality|dorf |ortsteil|gemeinde|село|селище|громад)"
 LEAFLET = "https://unpkg.com/leaflet@1.9.4/dist"
 CLUSTER = "https://unpkg.com/leaflet.markercluster@1.5.3/dist"
 
@@ -62,6 +63,8 @@ color:inherit;text-decoration:none}}
 .card b{{display:block;padding:8px 12px 2px;font-size:14px}}
 .card p{{margin:0;padding:0 12px 10px;font-size:12.5px;line-height:1.4;opacity:.85}}
 .card .d{{padding:0 12px 10px;font-size:11px;opacity:.6}}
+.noimg{{height:110px;display:flex;align-items:center;justify-content:center;font-size:44px;
+background:{"#2a3156" if dark else "#e6e1ff"}}}
 .card .adr{{padding:0 12px 4px;font-size:12px;opacity:.8}}
 .card .n{{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
 background:#f59e0b;color:#1a1200;font-size:12px;font-weight:800;margin-right:6px;border:2px solid #fff}}
@@ -131,56 +134,137 @@ map.on('zoomend', nbVis); nbVis();
 panel.querySelector('.x').onclick = () => {{ panel.classList.remove('open'); nbVis(); }};
 const GOOD = /{PLACES_GOOD_RE}/i;
 const BAD = /{PLACES_BAD_RE}/i;
+const VILLAGE = /{PLACES_VILLAGE_RE}/i;
 function km(a, b) {{ return map.distance(a, b) / 1000; }}
-async function nearby() {{
-  panel.classList.add('open'); nbVis();
-  const c = map.getCenter(), cards = document.getElementById('cards'), pst = document.getElementById('pst');
-  cards.innerHTML = ''; pst.textContent = LAB.nb_loading;
-  poiLayer.clearLayers();
+async function wikiPlaces(c) {{
   const u = 'https://{lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch'
     + `&ggscoord=${{c.lat}}|${{c.lng}}&ggsradius=10000&ggslimit=40&prop=pageimages|extracts|coordinates|info&coprop=type`
     + '&inprop=url&piprop=thumbnail&pithumbsize=400&exintro=1&explaintext=1&exsentences=2&exlimit=40';
-  try {{
-    const r = await (await fetch(u)).json();
-    let pages = Object.values((r.query || {{}}).pages || {{}});
-    const score = p => {{
-      const t = (p.title + ' ' + p.extract.slice(0, 120)).toLowerCase(), ty = p.coordinates[0].type;
-      let s = (ty === 'landmark' ? 3 : ty === 'building' ? 2 : 0);
-      if (GOOD.test(t)) s += 3;
-      if (BAD.test(t) || ['city', 'adm1st', 'adm2nd', 'country'].includes(ty)) s -= 6;
-      return s;
-    }};
-    pages = pages.filter(p => p.thumbnail && p.extract && p.coordinates).map(p => [score(p),
-      km(c, [p.coordinates[0].lat, p.coordinates[0].lon]), p]).filter(x => x[0] > -3)
-      .sort((a, b) => (b[0] - a[0]) || (a[1] - b[1])).slice(0, 5).map(x => x[2]);
-    if (!pages.length) {{ pst.textContent = LAB.nb_none; return; }}
-    pst.textContent = LAB.nb_source;
-    const bounds = [];
-    pages.forEach((p, k) => {{
-      const ll = [p.coordinates[0].lat, p.coordinates[0].lon]; bounds.push(ll);
-      const d = km(c, ll), n = k + 1;
-      const m = L.marker(ll, {{icon: L.divIcon({{className: 'poi', html: `<div><span>${{n}}</span></div>`,
-        iconSize: [30, 30], iconAnchor: [4, 34], popupAnchor: [12, -30]}}), zIndexOffset: 1000}})
-        .bindPopup(`<b>${{n}}. ${{esc(p.title)}}</b><br><span class="adr-${{k}}">&hellip;</span>`);
-      poiLayer.addLayer(m);
-      const a = document.createElement('a'); a.className = 'card'; a.href = p.fullurl; a.target = '_blank';
-      a.innerHTML = `<img src="${{p.thumbnail.source}}" alt=""><b><span class="n">${{n}}</span>${{esc(p.title)}}</b>`
-        + `<div class="adr adr-${{k}}">&hellip;</div><p>${{esc(p.extract)}}</p><div class="d">${{d.toFixed(1)}} km</div>`;
-      a.addEventListener('mouseenter', () => m.openPopup());
-      cards.appendChild(a);
-    }});
-    map.fitBounds(L.latLngBounds(bounds.concat([[c.lat, c.lng]])).pad(0.25), {{maxZoom: 16, paddingBottomRight: [360, 0]}});
-    addresses(pages);
-  }} catch (e) {{ pst.textContent = LAB.nb_error; }}
+  const r = await (await fetch(u)).json();
+  return Object.values((r.query || {{}}).pages || {{}}).filter(p => p.thumbnail && p.extract && p.coordinates).map(p => {{
+    const t = (p.title + ' ' + p.extract.slice(0, 120)).toLowerCase(), ty = p.coordinates[0].type;
+    let s = (ty === 'landmark' ? 3 : ty === 'building' ? 2 : 0);
+    if (GOOD.test(t)) s += 3;
+    if (BAD.test(t) || VILLAGE.test(t) || ['city', 'adm1st', 'adm2nd', 'country'].includes(ty)) s -= 6;
+    return {{title: p.title, lat: p.coordinates[0].lat, lon: p.coordinates[0].lon, img: p.thumbnail.source,
+            text: p.extract, url: p.fullurl, score: s, src: 'wiki'}};
+  }});
+}}
+// OpenStreetMap: in small towns it knows far more sights (viewpoints, observation towers, ruins) than Wikipedia
+const OSM_SCORE = {{tower: 8, viewpoint: 7, attraction: 6, museum: 6, castle: 6, fort: 5, ruins: 5, zoo: 6,
+  theme_park: 6, aquarium: 6, gallery: 4, manor: 4, monument: 3, archaeological_site: 4, memorial: 0, artwork: 0}};
+async function osmPlaces(c, rad) {{
+  const q = `[out:json][timeout:20];(`
+    + `nwr(around:${{rad}},${{c.lat}},${{c.lng}})["tourism"~"^(attraction|viewpoint|museum|gallery|zoo|theme_park|aquarium)$"];`
+    + `nwr(around:${{rad}},${{c.lat}},${{c.lng}})["man_made"="tower"]["tower:type"="observation"];`
+    + `nwr(around:${{rad}},${{c.lat}},${{c.lng}})["historic"~"^(castle|fort|ruins|manor|monument|archaeological_site)$"]["name"];`
+    + `node(around:${{rad}},${{c.lat}},${{c.lng}})["natural"="peak"]["name"];`
+    + `);out center tags 150;`;
+  // the app fetches it (same-origin endpoint): Overpass rejects some browser requests, and the app sends its own name
+  const resp = await fetch('osm', {{method: 'POST', body: q}});
+  if (!resp.ok) throw new Error('overpass ' + resp.status);
+  const r = await resp.json();
+  const els = (r.elements || []).map(e => ({{...e, lat: e.lat ?? (e.center || {{}}).lat, lon: e.lon ?? (e.center || {{}}).lon}}))
+    .filter(e => e.lat != null);
+  const peaks = els.filter(e => (e.tags || {{}}).natural === 'peak');
+  const out = [];
+  for (const e of els) {{
+    const t = e.tags || {{}};
+    if (t.natural === 'peak') continue;
+    const kind = t['tower:type'] === 'observation' ? 'tower' : (t.tourism || t.historic);
+    let name = t['name:{lang}'] || t.name || '';
+    if (kind === 'tower' || kind === 'viewpoint') {{
+      const pk = peaks.map(p => [map.distance([e.lat, e.lon], [p.lat, p.lon]), p]).sort((a, b) => a[0] - b[0])[0];
+      if (pk && pk[0] < 500) {{
+        const peak = pk[1].tags.name;
+        name = !name ? `${{LAB.types[kind] || ''}} \u2013 ${{peak}}` : (name.includes(peak) ? name : `${{name}} (${{peak}})`);
+      }}
+    }}
+    if (!name && kind !== 'tower') continue;
+    const label = LAB.types[kind] || '';
+    let img = '';
+    const file = t.wikimedia_commons && t.wikimedia_commons.startsWith('File:') ? t.wikimedia_commons.slice(5)
+      : (t.image && t.image.includes('File:') ? t.image.split('File:')[1] : '');
+    if (file) img = 'https://commons.wikimedia.org/wiki/Special:FilePath/' + encodeURIComponent(file) + '?width=400';
+    out.push({{title: name || label, lat: e.lat, lon: e.lon, img, text: [label, t.description || t.inscription || '']
+      .filter(Boolean).join(' \u2013 ').slice(0, 220), url: `https://www.openstreetmap.org/${{e.type}}/${{e.id}}`,
+      score: (OSM_SCORE[kind] ?? 1) + (img ? 1 : 0) + (t.wikipedia || t.wikidata ? 1 : 0), src: 'osm',
+      wiki: (t.wikipedia || '').split(':').slice(1).join(':')}});
+  }}
+  return out;
+}}
+function rank(c, wiki, osm) {{
+  // the same place from both sources: keep the Wikipedia entry (it has a photo and a description)
+  const titles = new Set(wiki.map(w => w.title));
+  const all = wiki.concat(osm.filter(o => !titles.has(o.wiki) &&
+    !wiki.some(w => map.distance([w.lat, w.lon], [o.lat, o.lon]) < 60)));
+  const seen = [];
+  return all.filter(x => x.score > -3).map(x => [x.score, km(c, [x.lat, x.lon]), x])
+    .sort((a, b) => (b[0] - a[0]) || (a[1] - b[1])).map(x => x[2])
+    .filter(x => {{
+      const nx = x.title.toLowerCase().replace(/\\s*\\(.*\\)\\s*$/, '');
+      if (seen.some(y => map.distance([y.lat, y.lon], [x.lat, x.lon]) < 40 || y.title.toLowerCase().includes(nx)
+          || nx.includes(y.title.toLowerCase().replace(/\\s*\\(.*\\)\\s*$/, '')))) return false;
+      seen.push(x); return true;
+    }})
+    .slice(0, 6);
+}}
+let nbRun = 0;
+function render(c, items, note) {{
+  const cards = document.getElementById('cards'), pst = document.getElementById('pst');
+  cards.innerHTML = ''; poiLayer.clearLayers();
+  if (!items.length) {{ pst.textContent = note || LAB.nb_none; return; }}
+  pst.textContent = note || LAB.nb_source;
+  const bounds = [];
+  items.forEach((p, k) => {{
+    const ll = [p.lat, p.lon]; bounds.push(ll);
+    const d = km(c, ll), n = k + 1;
+    const m = L.marker(ll, {{icon: L.divIcon({{className: 'poi', html: `<div><span>${{n}}</span></div>`,
+      iconSize: [30, 30], iconAnchor: [4, 34], popupAnchor: [12, -30]}}), zIndexOffset: 1000}})
+      .bindPopup(`<b>${{n}}. ${{esc(p.title)}}</b><br><span class="adr-${{k}}">&hellip;</span>`);
+    poiLayer.addLayer(m);
+    const a = document.createElement('a'); a.className = 'card'; a.href = p.url; a.target = '_blank';
+    const pic = p.img ? `<img src="${{p.img}}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{{className:'noimg',textContent:'\\u{{1F4CD}}'}}))">`
+      : `<div class="noimg">\\u{{1F3DE}}</div>`;
+    a.innerHTML = pic + `<b><span class="n">${{n}}</span>${{esc(p.title)}}</b>`
+      + `<div class="adr adr-${{k}}">&hellip;</div><p>${{esc(p.text)}}</p><div class="d">${{d.toFixed(1)}} km`
+      + ` &middot; ${{p.src === 'wiki' ? 'Wikipedia' : 'OpenStreetMap'}}</div>`;
+    a.addEventListener('mouseenter', () => m.openPopup());
+    cards.appendChild(a);
+  }});
+  map.fitBounds(L.latLngBounds(bounds.concat([[c.lat, c.lng]])).pad(0.25), {{maxZoom: 16, paddingBottomRight: [360, 0]}});
+  addresses(items);
+}}
+async function nearby() {{
+  panel.classList.add('open'); nbVis();
+  const run = ++nbRun, c = map.getCenter();
+  document.getElementById('cards').innerHTML = ''; poiLayer.clearLayers();
+  document.getElementById('pst').textContent = LAB.nb_loading;
+  const osmP = osmPlaces(c, 5000);
+  let wiki = [];
+  try {{ wiki = await wikiPlaces(c); }} catch (e) {{ }}
+  if (run !== nbRun) return;
+  render(c, rank(c, wiki, []), LAB.nb_more);  // Wikipedia at once, OpenStreetMap follows
+  let osm = null;
+  try {{ osm = await osmP; }} catch (e) {{ }}
+  if (run !== nbRun) return;
+  if (osm === null) {{
+    if (!wiki.length) document.getElementById('pst').textContent = LAB.nb_error;
+    else document.getElementById('pst').textContent = LAB.nb_osm_down;
+    return;
+  }}
+  render(c, rank(c, wiki, osm));
 }}
 nb.onclick = nearby;
 const poiLayer = L.layerGroup().addTo(map);
 panel.querySelector('.x').addEventListener('click', () => poiLayer.clearLayers());
+let addrRun = 0;
 async function addresses(pages) {{
+  const my = ++addrRun;  // a newer list replaced this one: stop writing addresses into it
   // addresses from OpenStreetMap (Nominatim): one by one, at most 1 request per second (service policy)
   for (let k = 0; k < pages.length; k++) {{
     const p = pages[k], u = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1'
-      + `&accept-language={lang}&lat=${{p.coordinates[0].lat}}&lon=${{p.coordinates[0].lon}}`;
+      + `&accept-language={lang}&lat=${{p.lat}}&lon=${{p.lon}}`;
     let txt = '';
     try {{
       const r = await (await fetch(u)).json(), a = r.address || {{}};
@@ -188,12 +272,42 @@ async function addresses(pages) {{
       const town = a.city || a.town || a.village || a.suburb || '';
       txt = [street, [a.postcode, town].filter(Boolean).join(' ')].filter(Boolean).join(', ') || r.display_name || '';
     }} catch (e) {{ txt = ''; }}
+    if (my !== addrRun) return;
     document.querySelectorAll('.adr-' + k).forEach(el => el.textContent = txt ? '\\u{{1F4CD}} ' + txt : '');
     await new Promise(res => setTimeout(res, 1100));
   }}
 }}
 </script></body></html>
 """
+
+
+OVERPASS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter")
+_OSM_CACHE = {}  # zapytanie -> odpowiedź (te same okolice nie obciążają serwerów drugi raz)
+USER_AGENT = "linux-icloud-photos (https://github.com/jgu-linux-apps/linux-icloud-photos)"
+
+
+def overpass(query: str) -> bytes:
+    """Zapytanie Overpass (OpenStreetMap) wysłane przez aplikację; przy błędzie próbuje serwera zapasowego."""
+    import urllib.parse
+    import urllib.request
+
+    if query in _OSM_CACHE:
+        return _OSM_CACHE[query]
+    last = None
+    for srv in OVERPASS:
+        try:
+            req = urllib.request.Request(srv, data=urllib.parse.urlencode({"data": query}).encode(),
+                                         headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=12) as r:
+                data = r.read()
+            if data.lstrip().startswith(b"{"):
+                _OSM_CACHE[query] = data
+                return data
+            last = RuntimeError("overpass: no JSON")
+        except Exception as e:  # noqa: BLE001
+            last = e
+    raise last or RuntimeError("overpass")
 
 
 class MapSession:
@@ -218,6 +332,17 @@ class MapSession:
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self.wfile.write(body)
+
+            def do_POST(self):
+                parts = urlparse(self.path).path.strip("/").split("/")
+                if len(parts) != 2 or parts[0] != outer.token or parts[1] != "osm":
+                    return self._send(404, "text/plain", b"not found")
+                n = min(int(self.headers.get("Content-Length") or 0), 20000)
+                q = self.rfile.read(n).decode("utf-8", "replace")
+                try:
+                    return self._send(200, "application/json", overpass(q))
+                except Exception as e:  # noqa: BLE001
+                    return self._send(502, "text/plain", str(e).encode())
 
             def do_GET(self):
                 u = urlparse(self.path)

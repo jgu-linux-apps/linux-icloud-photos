@@ -2856,8 +2856,17 @@ class MainWindow(Adw.ApplicationWindow):
                   "lang": i18n.LANG if i18n.LANG in ("pl", "en", "de", "uk") else "en",
                   "nearby": tr("Co warto zwiedzić w pobliżu?"), "nb_loading": tr("Szukam ciekawych miejsc…"),
                   "nb_none": tr("W pobliżu nie znaleziono opisanych miejsc"),
-                  "nb_source": tr("Źródło: Wikipedia, do 10 km od środka mapy"),
-                  "nb_error": tr("Nie udało się pobrać miejsc (brak internetu?)")}
+                  "nb_source": tr("Źródła: Wikipedia i OpenStreetMap, w pobliżu środka mapy"),
+                  "nb_error": tr("Nie udało się pobrać miejsc (brak internetu?)"),
+                  "nb_more": tr("Wikipedia - szukam jeszcze w OpenStreetMap…"),
+                  "nb_osm_down": tr("Tylko Wikipedia - OpenStreetMap chwilowo nie odpowiada"),
+                  "types": {"tower": tr("Wieża widokowa"), "viewpoint": tr("Punkt widokowy"),
+                            "attraction": tr("Atrakcja turystyczna"), "museum": tr("Muzeum"),
+                            "gallery": tr("Galeria"), "zoo": tr("Zoo"), "theme_park": tr("Park rozrywki"),
+                            "aquarium": tr("Akwarium"), "castle": tr("Zamek"), "fort": tr("Fort"),
+                            "ruins": tr("Ruiny"), "manor": tr("Dwór"), "monument": tr("Pomnik"),
+                            "memorial": tr("Miejsce pamięci"), "archaeological_site": tr("Stanowisko archeologiczne"),
+                            "artwork": tr("Rzeźba / instalacja")}}
         sess = map_page.MapSession(title, labels, lambda a: self.icloud.fetch(a, "thumb"))
         sess.stop = False
         self._map_session = sess
