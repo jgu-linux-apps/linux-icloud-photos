@@ -14,10 +14,16 @@ LEAFLET = "https://unpkg.com/leaflet@1.9.4/dist"
 CLUSTER = "https://unpkg.com/leaflet.markercluster@1.5.3/dist"
 
 
-def build(title: str, labels: dict, points_url: str = "points", thumb_url: str = "thumb/") -> str:
+def build(title: str, labels: dict, points_url: str = "points", thumb_url: str = "thumb/", dark: bool = False) -> str:
     """Strona mapy. labels: count ('{0}' = liczba pinezek), loading ('{0}' = sprawdzone zdjęcia), none."""
     t = html.escape(title)
     lab = json.dumps(labels)
+    # kafelki OpenStreetMap stonowane filtrem: ciemny motyw = odwrócona, granatowa mapa z konturami,
+    # jasny = szara, przygaszona (pinezki są wtedy najbardziej wyraźnym elementem)
+    tile_filter = ("invert(1) hue-rotate(200deg) brightness(0.78) contrast(1.15) saturate(0.35)" if dark
+                   else "grayscale(0.9) brightness(1.04) contrast(0.82)")
+    acc = "#22d3ee" if dark else "#7c5cff"
+    bar_bg, bar_fg = ("#161a2e", "#ecebff") if dark else ("#ffffff", "#1f1a3a")
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{t}</title>
@@ -26,8 +32,13 @@ def build(title: str, labels: dict, points_url: str = "points", thumb_url: str =
 <link rel="stylesheet" href="{CLUSTER}/MarkerCluster.Default.css">
 <style>
 html,body,#map{{height:100%;margin:0}} body{{font-family:system-ui,sans-serif}}
-#bar{{position:absolute;z-index:1000;top:10px;left:56px;background:#fff;padding:6px 12px;border-radius:10px;
-box-shadow:0 2px 10px rgba(0,0,0,.25);font-size:14px}}
+#bar{{position:absolute;z-index:1000;top:10px;left:56px;background:{bar_bg};color:{bar_fg};padding:6px 12px;
+border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.25);font-size:14px}}
+.leaflet-container{{background:{"#0e1016" if dark else "#f2f2f0"}}}
+.leaflet-tile-pane{{filter:{tile_filter}}}
+.marker-cluster,.marker-cluster div{{background:transparent}}
+.marker-cluster div{{background:{acc};color:#fff;font-weight:700;border:2px solid #fff;
+box-shadow:0 0 0 4px {acc}55}}
 .pp img{{display:block;width:180px;max-height:180px;object-fit:cover;border-radius:6px;margin-bottom:4px;
 background:#eee;min-height:120px}}
 .pp{{font-size:13px}}
@@ -48,7 +59,8 @@ const st = document.getElementById('st');
 let have = 0, fitted = false, userMoved = false;
 map.on('dragstart zoomstart', () => {{ if (fitted) userMoved = true; }});
 function add(list) {{
-  const ms = list.map(([i, lat, lon, name, date]) => L.marker([lat, lon]).bindPopup(
+  const ms = list.map(([i, lat, lon, name, date]) => L.circleMarker([lat, lon], {{radius: 7, weight: 2,
+      color: '#ffffff', fillColor: '{acc}', fillOpacity: 0.95}}).bindPopup(
     `<div class="pp"><img loading="lazy" src="{thumb_url}${{i}}" alt=""><b>${{esc(name)}}</b><br>${{esc(date)}}</div>`));
   group.addLayers(ms);
 }}
@@ -99,7 +111,8 @@ class MapSession:
                     return self._send(404, "text/plain", b"not found")
                 try:
                     if len(parts) == 1:
-                        page = build(outer.title, outer.labels)
+                        dark = parse_qs(u.query).get("dark", ["0"])[0] == "1"
+                        page = build(outer.title, outer.labels, dark=dark)
                         return self._send(200, "text/html; charset=utf-8", page.encode())
                     if parts[1] == "points":
                         start = int(parse_qs(u.query).get("from", ["0"])[0])

@@ -86,15 +86,7 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
-button.side-section { padding: 8px 12px; border-radius: 12px; background: alpha(currentColor, 0.05);
-                      transition: background 150ms, box-shadow 150ms; }
-button.side-section:hover { background: alpha(currentColor, 0.10); }
-button.side-section.open { background: alpha(@accent_bg_color, 0.14); }
-button.side-section.open .side-section-icon { color: @accent_color; }
-.side-count { font-size: 0.8em; font-weight: bold; padding: 1px 8px; border-radius: 999px;
-              background: alpha(currentColor, 0.12); }
-button.side-section.open .side-count { background: @accent_bg_color; color: @accent_fg_color; }
-.side-arrow { opacity: 0.6; }
+.side-tabs button { padding: 4px 6px; }
 .tile { background-color: alpha(currentColor, 0.08); }
 .viewer { background-color: black; }
 .caption { color: white; background-color: rgba(0,0,0,0.55);
@@ -1813,73 +1805,32 @@ class PairingDialog(Gtk.Window):
         self.on_done()
 
 
-class SideSection(Gtk.Box):
-    """Rozwijana sekcja lewego menu: przycisk-nagłówek (ikona, nazwa, licznik, strzałka) i lista pod nim.
-    Stan rozwinięcia jest zapamiętywany w konfiguracji."""
+SIDEBAR_MIN = 270  # najmniejsza szerokość menu, przy której mieszczą się wszystkie zakładki
 
-    def __init__(self, key, title, icon, expanded=True):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL)
-        self.key = key
-        saved = load_cfg().get("sections", {})
-        exp = saved.get(key, expanded)
-        self.btn = Gtk.ToggleButton(active=exp)
-        self.btn.add_css_class("side-section")
-        self.btn.set_margin_start(6)
-        self.btn.set_margin_end(6)
-        self.btn.set_margin_top(6)
-        hb = Gtk.Box(spacing=10)
-        ic = Gtk.Image.new_from_icon_name(icon)
-        ic.add_css_class("side-section-icon")
-        hb.append(ic)
-        self.lbl = Gtk.Label(label=title, xalign=0)
-        self.lbl.add_css_class("heading")
-        hb.append(self.lbl)
-        self.badge = Gtk.Label()
-        self.badge.add_css_class("side-count")
-        self.badge.set_valign(Gtk.Align.CENTER)
-        self.badge.set_visible(False)
-        hb.append(self.badge)
-        hb.append(Gtk.Box(hexpand=True))
-        self.arrow = Gtk.Image.new_from_icon_name("pan-down-symbolic")
-        self.arrow.add_css_class("side-arrow")
-        hb.append(self.arrow)
-        self.btn.set_child(hb)
-        self.rev = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN,
-                                transition_duration=180, reveal_child=exp)
-        self.append(self.btn)
-        self.append(self.rev)
-        self._sync()
-        self.btn.connect("toggled", self._on_toggled)
 
-    def _sync(self):
-        on = self.btn.get_active()
-        self.arrow.set_from_icon_name("pan-down-symbolic" if on else "pan-end-symbolic")
-        if on:
-            self.btn.add_css_class("open")
-        else:
-            self.btn.remove_css_class("open")
+class _TabProxy:
+    """Dawne sekcje menu (Typy mediów, Moje albumy, Udostępnione) są teraz zakładkami: ten obiekt zachowuje
+    stare wywołania (set_visible, set_expanded, set_count) i przekłada je na zakładki."""
 
-    def _on_toggled(self, _b):
-        on = self.btn.get_active()
-        self.rev.set_reveal_child(on)
-        self._sync()
-        sections = dict(load_cfg().get("sections", {}))
-        sections[self.key] = on
-        save_cfg(sections=sections)
+    def __init__(self, win, key, hide_tab=False):
+        self.win, self.key, self.hide_tab = win, key, hide_tab
 
-    def set_child(self, w):
-        w.set_margin_start(6)
-        self.rev.set_child(w)
+    def set_visible(self, on):
+        if self.hide_tab:
+            self.win.tab_btns[self.key].set_visible(bool(on))
+            if not on and self.win.side_stack.get_visible_child_name() == self.key:
+                self.win.tab_btns["lib"].set_active(True)
 
     def set_expanded(self, on):
-        self.btn.set_active(on)
+        if on:
+            self.win.tab_btns[self.key].set_active(True)
 
     def get_expanded(self):
-        return self.btn.get_active()
+        return self.win.side_stack.get_visible_child_name() == self.key
 
     def set_count(self, n):
-        self.badge.set_text(str(n))
-        self.badge.set_visible(n is not None)
+        if self.key in self.win.tab_btns:
+            self.win.tab_btns[self.key].set_tooltip_text(str(n) if n else None)
 
 
 class AlbumRow(Gtk.ListBoxRow):
@@ -2283,6 +2234,11 @@ class MainWindow(Adw.ApplicationWindow):
         lbl.add_css_class("heading")
         return lbl
 
+    def _show_tab(self, key):
+        self.side_stack.set_visible_child_name(key)
+        if key != "shared":
+            save_cfg(side_tab=key)
+
     def _make_list(self):
         lb = Gtk.ListBox()
         lb.add_css_class("navigation-sidebar")
@@ -2305,7 +2261,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.split.set_shrink_start_child(False)
         self.split.set_resize_end_child(True)
         self.split.set_shrink_end_child(False)
-        self.split.set_position(int(load_cfg().get("sidebar_w", 270)))
+        self.split.set_position(max(SIDEBAR_MIN, int(load_cfg().get("sidebar_w", 280))))
         self.split.connect("notify::position", self._on_split_pos)
         side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         self.search = Gtk.SearchEntry(placeholder_text=tr("Szukaj albumu"))
@@ -2322,41 +2278,70 @@ class MainWindow(Adw.ApplicationWindow):
         self.list_jump.append(self.jump_row)
         self.list_jump.set_visible(False)
         side.append(self.list_jump)
+        # zakładki: Biblioteka / Albumy / Wspólne (jedna lista naraz, krótkie menu)
+        tabs = Gtk.Box(spacing=0, homogeneous=True)
+        tabs.add_css_class("linked")
+        tabs.add_css_class("side-tabs")
+        tabs.set_margin_start(8)
+        tabs.set_margin_end(8)
+        tabs.set_margin_top(4)
+        self.side_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=120,
+                                    vhomogeneous=False)
+        self.tab_btns = {}
+        first = None
+        for key, label in (("lib", tr("Biblioteka")), ("albums", tr("Albumy")), ("shared", tr("Wspólne"))):
+            b = Gtk.ToggleButton(label=label)
+            if first is None:
+                first = b
+            else:
+                b.set_group(first)
+            b.connect("toggled", lambda btn, k=key: btn.get_active() and self._show_tab(k))
+            tabs.append(b)
+            self.tab_btns[key] = b
+        side.append(tabs)
+        side.append(self.side_stack)
+
+        lib = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.list_primary = self._make_list()
-        side.append(self.list_primary)
+        lib.append(self.list_primary)
         self.list_more = self._make_list()
-        self.exp_more = SideSection("media", tr("Typy mediów"), "view-grid-symbolic", expanded=False)
-        self.exp_more.set_child(self.list_more)
-        self.exp_more.set_visible(False)
-        side.append(self.exp_more)
-        self.list_user = self._make_list()
-        self.exp_user = SideSection("user", tr("Moje albumy"), "folder-pictures-symbolic")
-        self.exp_user.set_child(self.list_user)
-        self.exp_user.set_visible(False)
-        side.append(self.exp_user)
+        lib.append(self.list_more)
+        self.side_stack.add_named(lib, "lib")
+
+        albums = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         self.new_album_btn = Gtk.Button()
         nb = Gtk.Box(spacing=8)
         nb.append(Gtk.Image.new_from_icon_name("list-add-symbolic"))
         nb.append(Gtk.Label(label=tr("Nowy album…"), xalign=0))
         self.new_album_btn.set_child(nb)
         self.new_album_btn.add_css_class("flat")
-        self.new_album_btn.set_margin_start(14)
+        self.new_album_btn.set_margin_start(8)
         self.new_album_btn.set_margin_end(8)
+        self.new_album_btn.set_margin_top(4)
         self.new_album_btn.set_halign(Gtk.Align.START)
         self.new_album_btn.set_visible(False)
         self.new_album_btn.connect("clicked", lambda *_: self.new_album())
-        side.append(self.new_album_btn)
+        albums.append(self.new_album_btn)
+        self.list_user = self._make_list()
+        albums.append(self.list_user)
+        self.side_stack.add_named(albums, "albums")
+
         self.list_shared = self._make_list()
-        self.exp_shared = SideSection("shared", tr("Udostępnione albumy"), "emblem-shared-symbolic")
-        self.exp_shared.set_child(self.list_shared)
-        self.exp_shared.set_visible(False)
-        side.append(self.exp_shared)
+        self.side_stack.add_named(self.list_shared, "shared")
+
+        self.exp_more = _TabProxy(self, "lib")
+        self.exp_user = _TabProxy(self, "albums")
+        self.exp_shared = _TabProxy(self, "shared", hide_tab=True)
+        self.tab_btns["shared"].set_visible(False)
+        cur = load_cfg().get("side_tab", "lib")
+        self.tab_btns.get(cur if cur in self.tab_btns else "lib").set_active(True)
+        self._show_tab(cur if cur in ("lib", "albums") else "lib")
 
         scroller = Gtk.ScrolledWindow()
         scroller.set_child(side)
         scroller.set_vexpand(True)
         side_col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        side_col.set_size_request(170, -1)
+        side_col.set_size_request(SIDEBAR_MIN, -1)  # zakładki Biblioteka / Albumy / Wspólne zawsze w całości
         side_col.append(scroller)
         ver = Gtk.Label(label=f"v{VERSION}  ·  {DATE}\n{CREDITS}", xalign=0)
         ver.add_css_class("dim-label")
@@ -2380,7 +2365,10 @@ class MainWindow(Adw.ApplicationWindow):
         grid_ov.set_child(grid_sw)
         grid_ov.add_overlay(self.rubber)
         self._install_rubberband(grid_sw)
-        right.append(grid_ov)
+        self.main_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=150)
+        self.main_stack.set_vexpand(True)
+        self.main_stack.add_named(grid_ov, "grid")
+        right.append(self.main_stack)
         right.append(self._build_selection_bar())
         self.split.set_end_child(right)
         side_col.bind_property(
@@ -2414,9 +2402,7 @@ class MainWindow(Adw.ApplicationWindow):
         for lb in self.lists:
             lb.invalidate_filter()
         if entry.get_text().strip():
-            self.exp_more.set_expanded(True)
-            self.exp_user.set_expanded(True)
-            self.exp_shared.set_expanded(True)
+            self.exp_user.set_expanded(True)  # szukanie dotyczy głównie własnych albumów
 
     def _shared_loaded(self, gen, shared, err):
         if err or not shared or self._expired:
@@ -2629,47 +2615,25 @@ class MainWindow(Adw.ApplicationWindow):
             self.toast(tr("Mapa otwarta w przeglądarce - pinezki dochodzą na bieżąco"))
 
     def _open_map_window(self, sess, title):
-        """Mapa w oknie aplikacji (WebKitGTK 6). Zwraca False, gdy WebKit nie jest zainstalowany."""
+        """Mapa w głównym widoku aplikacji (WebKitGTK 6), w miejscu siatki zdjęć.
+        Zwraca False, gdy WebKit nie jest zainstalowany (wtedy mapa idzie do przeglądarki)."""
         try:
             gi.require_version("WebKit", "6.0")
             from gi.repository import WebKit
         except (ValueError, ImportError):
             log.info("brak WebKitGTK 6.0 - mapa w przeglądarce")
             return False
-        win = getattr(self, "_map_win", None)
-        if win is None:
-            win = Adw.ApplicationWindow(application=self.get_application(), default_width=1100,
-                                        default_height=750)
-            tv = Adw.ToolbarView()
-            hb = Adw.HeaderBar()
-            win._wt = Adw.WindowTitle(title=tr("Mapa"))
-            hb.set_title_widget(win._wt)
-            ext = Gtk.Button(icon_name="web-browser-symbolic")
-            ext.set_tooltip_text(tr("Otwórz w przeglądarce"))
-            ext.connect("clicked", lambda *_: Gtk.UriLauncher.new(win._url).launch(win, None, None))
-            hb.pack_end(ext)
-            tv.add_top_bar(hb)
-            win._web = WebKit.WebView()
-            win._web.set_vexpand(True)
-            tv.set_content(win._web)
-            win.set_content(tv)
-
-            def closed(*_):
-                cur = getattr(self, "_map_session", None)
-                if cur is not None:
-                    cur.stop = True
-                    cur.close()
-                    self._map_session = None
-                self._map_win = None
-                return False
-
-            win.connect("close-request", closed)
-            self._map_win = win
-        win._url = sess.url
-        win._wt.set_title(tr("Mapa"))
-        win._wt.set_subtitle(title)
-        win._web.load_uri(sess.url)
-        win.present()
+        if getattr(self, "_map_web", None) is None:
+            box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            self._map_web = WebKit.WebView()
+            self._map_web.set_vexpand(True)
+            self._map_web.set_hexpand(True)
+            box.append(self._map_web)
+            self.main_stack.add_named(box, "map")
+        self._map_web.load_uri(sess.url + ("?dark=1" if Adw.StyleManager.get_default().get_dark() else ""))
+        self.main_stack.set_visible_child_name("map")
+        self.wtitle.set_title(tr("Mapa"))
+        self.wtitle.set_subtitle(title)
         return True
 
     def save_album(self, row):
@@ -2859,16 +2823,24 @@ class MainWindow(Adw.ApplicationWindow):
             self._busy = False
             self._jump_from_query()
             return
-        if row.key == "__map__":  # mapa całej biblioteki w przeglądarce; zaznaczenie wraca do albumu
-            prev = self._map_prev
+        if row.key == "__map__":  # mapa całej biblioteki w głównym widoku, zamiast siatki zdjęć
             self._busy = True
-            lb.unselect_all()
-            if prev is not None and prev.get_parent() is not None:
-                prev.get_parent().select_row(prev)
+            for other in self.lists:
+                if other is not lb:
+                    other.unselect_all()
             self._busy = False
+            self.wtitle.set_title(tr("Mapa"))
+            self.wtitle.set_subtitle("")
             self.show_map(row, limit=30000, title=tr("Wszystkie zdjęcia"))
             return
         self._map_prev = row
+        if hasattr(self, "main_stack") and self.main_stack.get_visible_child_name() != "grid":
+            self.main_stack.set_visible_child_name("grid")
+            cur = getattr(self, "_map_session", None)
+            if cur is not None:  # mapa schowana: przestań przeglądać bibliotekę w tle
+                cur.stop = True
+                cur.close()
+                self._map_session = None
         self._busy = True  # tylko jedna zaznaczona pozycja w całym menu
         for other in self.lists:
             if other is not lb:
@@ -4390,7 +4362,7 @@ class MainWindow(Adw.ApplicationWindow):
         dlg.set_detail(tr("Zdjęcia zostaną przeniesione do albumu „Ostatnio usunięte” w iCloud "
                           "(Apple zwykle przechowuje je tam 30 dni) i znikną z biblioteki na "
                           "wszystkich Twoich urządzeniach. Przywrócisz je w albumie „Ostatnio usunięte” "
-                          "(Typy mediów → Ostatnio usunięte → zaznacz → Przywróć)."))
+                          "(Biblioteka → Ostatnio usunięte → zaznacz → Przywróć)."))
         dlg.set_buttons([tr("Anuluj"), tr("Usuń")])
         dlg.set_cancel_button(0)
         dlg.set_default_button(0)
