@@ -77,6 +77,8 @@ UK = {
     "Cache size limit (GB)": "Ліміт розміру кешу (ГБ)",
     "Used now": "Зайнято зараз",
     "Clear cache": "Очистити кеш",
+    'Back': 'Назад',
+    'Back to the photos (Esc)': 'Назад до фото (Esc)',
     'What is worth seeing nearby?': 'Що варто побачити поруч?',
     'Looking for interesting places…': 'Шукаю цікаві місця…',
     'No described places found nearby': 'Поруч не знайдено описаних місць',

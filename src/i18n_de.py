@@ -77,6 +77,8 @@ DE = {
     "Cache size limit (GB)": "Cache-Größenlimit (GB)",
     "Used now": "Aktuell belegt",
     "Clear cache": "Cache leeren",
+    'Back': 'Zurück',
+    'Back to the photos (Esc)': 'Zurück zu den Fotos (Esc)',
     'What is worth seeing nearby?': 'Was gibt es in der Nähe zu sehen?',
     'Looking for interesting places…': 'Suche interessante Orte…',
     'No described places found nearby': 'In der Nähe wurden keine beschriebenen Orte gefunden',

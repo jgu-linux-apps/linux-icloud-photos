@@ -1052,6 +1052,82 @@ class Viewer(Gtk.Window):
             GLib.timeout_add_seconds(4, watchdog)
 
 
+class EmbeddedViewer(Viewer):
+    """Podgląd zdjęcia / filmu w głównym oknie, po prawej, w miejscu siatki (jak mapa).
+    Korzysta z całej logiki Viewer; zamiast osobnego okna jego zawartość trafia do main_stack.
+    Esc albo „Wróć” zamyka podgląd i wraca do siatki."""
+
+    def __init__(self, win, index):
+        self._closed = False
+        super().__init__(win, index)
+        content = self.get_child()
+        self.set_child(None)
+        content.add_css_class("viewer")
+        back = Gtk.Button()
+        bb = Gtk.Box(spacing=6)
+        bb.append(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
+        bb.append(Gtk.Label(label=tr("Wróć")))
+        back.set_child(bb)
+        back.add_css_class("osd")
+        back.add_css_class("pill")
+        back.set_halign(Gtk.Align.START)
+        back.set_valign(Gtk.Align.START)
+        back.set_margin_start(12)
+        back.set_margin_top(12)
+        back.set_tooltip_text(tr("Wróć do zdjęć (Esc)"))
+        back.connect("clicked", lambda *_: self.close())
+        content.add_overlay(back)
+        self._content = content
+        win.main_stack.add_named(content, "viewer")
+        win.main_stack.set_visible_child_name("viewer")
+        win.grab_focus()
+
+    # --- zachowanie „okna” przekierowane do głównego okna ---
+    def present(self):
+        pass
+
+    def get_visible(self):
+        return not self._closed
+
+    def is_fullscreen(self):
+        return self.win.is_fullscreen()
+
+    def fullscreen(self):
+        self.win.sidebar_scroller.set_visible(False)
+        self.win.fullscreen()
+
+    def unfullscreen(self):
+        self.win.unfullscreen()
+        self.win.sidebar_scroller.set_visible(True)
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._stop_video()
+        if self.win.is_fullscreen():
+            self.unfullscreen()
+        self.win.viewers.discard(self)
+        self.win._close_embedded_viewer(self)
+
+    def _delete_current(self):
+        if self.store.get_n_items() == 0:
+            return
+        self.win.confirm_delete([self.store.get_item(self.index).asset])
+
+    def _play_video(self):
+        # w podglądzie w oknie film gra wbudowany odtwarzacz (M nadal otwiera mpv)
+        obj = self.store.get_item(self.index)
+        if not obj.is_video:
+            return
+        if self.win.cast_target is not None:
+            self.win.cast_asset(obj.asset)
+            self.caption.set_text(self._label(tr("(wysłano na TV)")))
+        else:
+            self._page("vid")
+            self._play(obj, self.win.icloud.video_version(obj.asset, True))
+
+
 class Slideshow(Gtk.Window):
     """Pokaz slajdów bieżącego albumu: PLAY/pauza, ←/→, odstęp, wysyłka na TV."""
 
@@ -3264,11 +3340,23 @@ class MainWindow(Adw.ApplicationWindow):
         if obj.is_video and self.cast_target is not None:
             self.cast_asset(obj.asset)
             return
-        if obj.is_video and self.external_video_ok():
-            self.play_external(obj)
-            return
-        self._viewer = Viewer(self, pos)
-        self._viewer.present()
+        old = getattr(self, "_viewer", None)
+        if isinstance(old, EmbeddedViewer) and old.get_visible():
+            old.close()
+        self._viewer = EmbeddedViewer(self, pos)
+        if obj.is_video:
+            GLib.idle_add(lambda: (self._viewer._play_video() if self._viewer.get_visible() else None, False)[1])
+
+    def _close_embedded_viewer(self, v):
+        page = getattr(v, "_content", None)
+        back = "grid"
+        if self.main_stack.get_visible_child() is page:
+            self.main_stack.set_visible_child_name(back)
+        if page is not None and page.get_parent() is self.main_stack:
+            GLib.timeout_add(300, lambda: (page.get_parent() is self.main_stack and self.main_stack.remove(page), False)[1])
+        if self._viewer is v:
+            self._viewer = None
+        self.grid_view.grab_focus()
 
     # --- ładowanie albumu ---
     def load_album(self, album, _auto=False, jump=None):
@@ -4633,6 +4721,12 @@ class MainWindow(Adw.ApplicationWindow):
         return True
 
     def _on_key(self, _c, keyval, _code, state):
+        v = getattr(self, "_viewer", None)
+        if (isinstance(v, EmbeddedViewer) and v.get_visible() and hasattr(self, "main_stack")
+                and self.main_stack.get_visible_child_name() == "viewer"
+                and not (self.search.has_focus() or self.search.get_focus_child() is not None)):
+            if v.on_key(_c, keyval, _code, state):
+                return True
         on_main = self.stack.get_visible_child_name() == "main"
         if on_main and (keyval == Gdk.KEY_F5 or (
                 keyval in (Gdk.KEY_r, Gdk.KEY_R) and state & Gdk.ModifierType.CONTROL_MASK)):

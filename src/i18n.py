@@ -198,6 +198,8 @@ EN = {
     "Limit pamięci podręcznej (GB)": "Cache size limit (GB)",
     "Zajęte teraz": "Used now",
     "Wyczyść pamięć podręczną": "Clear cache",
+    'Wróć': 'Back',
+    'Wróć do zdjęć (Esc)': 'Back to the photos (Esc)',
     'Co warto zwiedzić w pobliżu?': 'What is worth seeing nearby?',
     'Szukam ciekawych miejsc…': 'Looking for interesting places…',
     'W pobliżu nie znaleziono opisanych miejsc': 'No described places found nearby',

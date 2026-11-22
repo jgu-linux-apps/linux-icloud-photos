@@ -50,7 +50,7 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Layout option "Rows (like Google Photos)": photos keep their proportions in rows of equal height that fill the width
 - The row height follows the zoom slider, Ctrl +/-, and the view presets; rows re-flow when the window or menu width changes
 - New photos are appended to the rows while scrolling without resetting the view; portrait/landscape orientation is respected
-- Photo viewer with fullscreen, arrow-key navigation and prefetching of neighbouring photos
+- Photo viewer inside the main window (in place of the grid, "Back" or Esc returns to the photos) with fullscreen, arrow-key navigation and prefetching of neighbouring photos
 - Photo zoom bar (− / slider / + / Fit), pinch gesture, double-click zoom and drag to pan
 - Original-quality image is fetched automatically when you zoom in
 - Video thumbnails (poster frame) in the grid and a play button in the viewer
@@ -182,7 +182,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
-- 1.0.1: Map: "What is worth seeing nearby?" button when zoomed in (zoom 11+) opens a side panel on the right with up to 5 places within 10 km of the map centre, each with a photo, a short description and the distance (from Wikipedia in the app language; clicking a place opens its article in the browser). Numbers on photo groups are readable in the dark theme. Nicer right-click menus (icons, rounded, slightly translucent, delete actions in red) in light and dark themes; the glow of the top row of photos is no longer cut off. Fixed the error message when the map could not be prepared.
+- 1.0.1: Map: "What is worth seeing nearby?" button when zoomed in (zoom 11+) opens a side panel on the right with up to 5 places within 10 km of the map centre, each with a photo, a short description and the distance (from Wikipedia in the app language; clicking a place opens its article in the browser). Numbers on photo groups are readable in the dark theme. Nicer right-click menus (icons, rounded, slightly translucent, delete actions in red) in light and dark themes; the glow of the top row of photos is no longer cut off. Photos and videos open in the main window, in place of the grid (like the map), with a "Back" button and Esc to return; videos play in the built-in player there (M still opens mpv). Fixed the error message when the map could not be prepared.
 - 1.0.0: Faster start of All Photos (order correction remembered, first 60 photos shown at once); start-up splash screen (light or dark, following the system theme); Recently Deleted with "Restore" and "Delete forever"; hide and unhide photos; create, rename and delete albums and remove photos from an album; Shared Albums section (view only); save a whole album to a folder; map of an album's photos (OpenStreetMap in the browser); "Map" entry in the left menu (opens at once, pins are added progressively); left menu with Library / Albums / Shared tabs; map inside the main window, muted dark/light; viewer shortcuts `S` (favourite) and `R` (rotate in the viewer). New backend test for these operations.
 - 0.17.10: Deleting photos is confirmed again: the CloudKit record lookup is called with keyword arguments, as pyicloud 2026.10.1 requires (before, the confirmation failed with a TypeError although the photo was deleted).
 - 0.17.9: Apple can keep answering the library indexing check with “FAILED” while iCloud.com shows the photos normally; the app now ignores that state (and logs it) instead of refusing to load the albums.
