@@ -83,10 +83,20 @@ ic, _ = make(c, shared=[Stream("Rodzina"), Stream(""), Stream("ania")])
 step("shared_sorted", lambda: [n for n, _a in ic.shared_albums()])
 ic, _ = make(c, shared_fail=True); step("shared_unavailable", lambda: ic.shared_albums())
 ic, _ = make(c); al = PhotoAlbum([Asset(1, lat=50.06), Asset(2), Asset(3, lat=0.0)])
-step("geo_points", lambda: [(p["name"], p["lat"], p["lon"], p["thumb"]) for p in ic.geo_points(al)])
+step("geo_points", lambda: [(p["name"], p["lat"], p["lon"]) for p in ic.geo_points(al)])
 backend.READ_ONLY = True
 step("read_only_guard", lambda: ic.restore_assets(A))
 backend.READ_ONLY = False
-import map_page
-html = map_page.build("A <b>", [{"lat": 1, "lon": 2, "name": "x", "date": "d", "thumb": None}], {"count": "n: {0}"})
-step("map_page", lambda: ("A &lt;b&gt;" in html, "n: 1" in html, "leaflet@1.9.4" in html))
+import map_page, urllib.request, json as _j
+html = map_page.build("A <b>", {"count": "n: {0}", "loading": "l {0}", "none": "0"})
+step("map_page", lambda: ("A &lt;b&gt;" in html, "leaflet@1.9.4" in html, "points?from=" in html))
+ms = map_page.MapSession("T", {"count": "{0}", "loading": "{0}", "none": "-"}, lambda a: b"JPEGDATA")
+ms.add(Asset(1), 50.0, 19.0, "IMG_1.HEIC", "2024-01-01 10:00"); ms.checked = 7
+get = lambda path: urllib.request.urlopen(ms.url + path, timeout=5).read()
+step("map_server_page", lambda: b"<title>T</title>" in get(""))
+step("map_server_points", lambda: _j.loads(get("points?from=0")))
+ms.done = True
+step("map_server_points_from", lambda: _j.loads(get("points?from=1")))
+step("map_server_thumb", lambda: get("thumb/0"))
+step("map_server_bad_token", lambda: urllib.request.urlopen(ms.url.replace(ms.token, "x"), timeout=5).status)
+ms.close()

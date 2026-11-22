@@ -14,9 +14,14 @@
   "is_user_album -> (True, False)",
   "shared_sorted -> ['ania', 'Rodzina']",
   "shared_unavailable -> []",
-  "geo_points -> [('IMG_1.HEIC', 50.06, 19.0, None), ('IMG_3.HEIC', 0.0, 19.0, None)]",
+  "geo_points -> [('IMG_1.HEIC', 50.06, 19.0), ('IMG_3.HEIC', 0.0, 19.0)]",
   "read_only_guard -> EXC PermissionError: Tryb wyboru: biblioteka jest tylko do odczytu",
-  "map_page -> (True, True, True)"
+  "map_page -> (True, True, True)",
+  "map_server_page -> True",
+  "map_server_points -> {'points': [[0, 50.0, 19.0, 'IMG_1.HEIC', '2024-01-01 10:00']], 'done': False, 'checked': 7}",
+  "map_server_points_from -> {'points': [], 'done': True, 'checked': 7}",
+  "map_server_thumb -> b'JPEGDATA'",
+  "map_server_bad_token -> EXC HTTPError: HTTP Error 404: Not Found"
  ],
  "runs": 2,
  "dropped_unstable": 0

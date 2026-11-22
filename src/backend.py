@@ -873,16 +873,19 @@ class ICloud:
                 out.append((name, a))
         return sorted(out, key=lambda t: t[0].lower())
 
-    def geo_points(self, album, limit: int = 6000, progress=None) -> list[dict]:
-        """Zdjęcia albumu z położeniem (pola locationLatitude/Longitude z iCloud, bez pobierania plików)."""
+    def iter_geo(self, album, limit: int = 30000, on_checked=None):
+        """Leniwie: (zdjęcie, lat, lon, nazwa, data) dla zdjęć z położeniem (pola locationLatitude/Longitude
+        z iCloud, bez pobierania plików). on_checked(k) co 100 sprawdzonych zdjęć."""
         import copy
         from pyicloud.services.photos_cloudkit.mappers import record_field_value
 
-        out, k = [], 0
+        k = 0
         for a in self.iter_assets(copy.copy(album), True):
             k += 1
             if k > limit:
                 break
+            if on_checked and k % 100 == 0:
+                on_checked(k)
             try:
                 lat = record_field_value(a._asset_record, "locationLatitude")
                 lon = record_field_value(a._asset_record, "locationLongitude")
@@ -890,18 +893,14 @@ class ICloud:
                 continue
             if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)) or (lat == 0 and lon == 0):
                 continue
-            thumb = None
-            try:
-                p, _v = self._cache_path(a, "thumb")
-                thumb = str(p) if p.exists() else None
-            except Exception:  # noqa: BLE001
-                pass
             d = self.asset_date(a)
-            out.append({"lat": float(lat), "lon": float(lon), "name": a.filename,
-                        "date": d.strftime("%Y-%m-%d %H:%M") if d else "", "thumb": thumb})
-            if progress and k % 200 == 0:
-                progress(k, limit)
-        return out
+            yield a, float(lat), float(lon), a.filename, d.strftime("%Y-%m-%d %H:%M") if d else ""
+        if on_checked:
+            on_checked(k)
+
+    def geo_points(self, album, limit: int = 6000) -> list[dict]:
+        return [{"lat": la, "lon": lo, "name": n, "date": d}
+                for _a, la, lo, n, d in self.iter_geo(album, limit)]
 
     def save_album(self, album, folder: str, progress=None, should_stop=None):
         """Zapisuje oryginały całego albumu do folderu (istniejących plików nie nadpisuje)."""

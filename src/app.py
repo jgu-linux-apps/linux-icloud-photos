@@ -86,6 +86,15 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+button.side-section { padding: 8px 12px; border-radius: 12px; background: alpha(currentColor, 0.05);
+                      transition: background 150ms, box-shadow 150ms; }
+button.side-section:hover { background: alpha(currentColor, 0.10); }
+button.side-section.open { background: alpha(@accent_bg_color, 0.14); }
+button.side-section.open .side-section-icon { color: @accent_color; }
+.side-count { font-size: 0.8em; font-weight: bold; padding: 1px 8px; border-radius: 999px;
+              background: alpha(currentColor, 0.12); }
+button.side-section.open .side-count { background: @accent_bg_color; color: @accent_fg_color; }
+.side-arrow { opacity: 0.6; }
 .tile { background-color: alpha(currentColor, 0.08); }
 .viewer { background-color: black; }
 .caption { color: white; background-color: rgba(0,0,0,0.55);
@@ -1804,6 +1813,75 @@ class PairingDialog(Gtk.Window):
         self.on_done()
 
 
+class SideSection(Gtk.Box):
+    """Rozwijana sekcja lewego menu: przycisk-nagłówek (ikona, nazwa, licznik, strzałka) i lista pod nim.
+    Stan rozwinięcia jest zapamiętywany w konfiguracji."""
+
+    def __init__(self, key, title, icon, expanded=True):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.key = key
+        saved = load_cfg().get("sections", {})
+        exp = saved.get(key, expanded)
+        self.btn = Gtk.ToggleButton(active=exp)
+        self.btn.add_css_class("side-section")
+        self.btn.set_margin_start(6)
+        self.btn.set_margin_end(6)
+        self.btn.set_margin_top(6)
+        hb = Gtk.Box(spacing=10)
+        ic = Gtk.Image.new_from_icon_name(icon)
+        ic.add_css_class("side-section-icon")
+        hb.append(ic)
+        self.lbl = Gtk.Label(label=title, xalign=0)
+        self.lbl.add_css_class("heading")
+        hb.append(self.lbl)
+        self.badge = Gtk.Label()
+        self.badge.add_css_class("side-count")
+        self.badge.set_valign(Gtk.Align.CENTER)
+        self.badge.set_visible(False)
+        hb.append(self.badge)
+        hb.append(Gtk.Box(hexpand=True))
+        self.arrow = Gtk.Image.new_from_icon_name("pan-down-symbolic")
+        self.arrow.add_css_class("side-arrow")
+        hb.append(self.arrow)
+        self.btn.set_child(hb)
+        self.rev = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN,
+                                transition_duration=180, reveal_child=exp)
+        self.append(self.btn)
+        self.append(self.rev)
+        self._sync()
+        self.btn.connect("toggled", self._on_toggled)
+
+    def _sync(self):
+        on = self.btn.get_active()
+        self.arrow.set_from_icon_name("pan-down-symbolic" if on else "pan-end-symbolic")
+        if on:
+            self.btn.add_css_class("open")
+        else:
+            self.btn.remove_css_class("open")
+
+    def _on_toggled(self, _b):
+        on = self.btn.get_active()
+        self.rev.set_reveal_child(on)
+        self._sync()
+        sections = dict(load_cfg().get("sections", {}))
+        sections[self.key] = on
+        save_cfg(sections=sections)
+
+    def set_child(self, w):
+        w.set_margin_start(6)
+        self.rev.set_child(w)
+
+    def set_expanded(self, on):
+        self.btn.set_active(on)
+
+    def get_expanded(self):
+        return self.btn.get_active()
+
+    def set_count(self, n):
+        self.badge.set_text(str(n))
+        self.badge.set_visible(n is not None)
+
+
 class AlbumRow(Gtk.ListBoxRow):
     def __init__(self, title, icon, album, key=None, cover=False, static=False, bold=False):
         super().__init__()
@@ -2247,18 +2325,13 @@ class MainWindow(Adw.ApplicationWindow):
         self.list_primary = self._make_list()
         side.append(self.list_primary)
         self.list_more = self._make_list()
-        self.exp_more = Gtk.Expander()
-        self.exp_more.set_label_widget(self._bold_label(tr("Typy mediów")))
+        self.exp_more = SideSection("media", tr("Typy mediów"), "view-grid-symbolic", expanded=False)
         self.exp_more.set_child(self.list_more)
-        self.exp_more.set_margin_start(8)
         self.exp_more.set_visible(False)
         side.append(self.exp_more)
         self.list_user = self._make_list()
-        self.exp_user = Gtk.Expander()
-        self.exp_user_lbl = self._bold_label(tr("Moje albumy"))
-        self.exp_user.set_label_widget(self.exp_user_lbl)
+        self.exp_user = SideSection("user", tr("Moje albumy"), "folder-pictures-symbolic")
         self.exp_user.set_child(self.list_user)
-        self.exp_user.set_margin_start(8)
         self.exp_user.set_visible(False)
         side.append(self.exp_user)
         self.new_album_btn = Gtk.Button()
@@ -2274,11 +2347,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.new_album_btn.connect("clicked", lambda *_: self.new_album())
         side.append(self.new_album_btn)
         self.list_shared = self._make_list()
-        self.exp_shared = Gtk.Expander()
-        self.exp_shared_lbl = self._bold_label(tr("Udostępnione albumy"))
-        self.exp_shared.set_label_widget(self.exp_shared_lbl)
+        self.exp_shared = SideSection("shared", tr("Udostępnione albumy"), "emblem-shared-symbolic")
         self.exp_shared.set_child(self.list_shared)
-        self.exp_shared.set_margin_start(8)
         self.exp_shared.set_visible(False)
         side.append(self.exp_shared)
 
@@ -2359,7 +2429,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._shared_ids = {id(a) for _n, a in shared}
         for name, album in shared:
             self.list_shared.append(AlbumRow(name, "emblem-shared-symbolic", album, key="shared:" + name))
-        self.exp_shared_lbl.set_text(tr("Udostępnione albumy ({0})").format(len(shared)))
+        self.exp_shared.set_count(len(shared))
         self.exp_shared.set_visible(True)
 
     # --- zarządzanie albumami (menu prawego przycisku na liście albumów) ---
@@ -2505,35 +2575,39 @@ class MainWindow(Adw.ApplicationWindow):
 
         dlg.choose(self, None, chosen)
 
-    def show_map(self, row, limit=6000, title=None):
-        """Mapa zdjęć albumu z położeniem: strona HTML (OpenStreetMap) w przeglądarce."""
+    def show_map(self, row, limit=30000, title=None):
+        """Mapa zdjęć: strona w przeglądarce otwiera się od razu, pinezki dochodzą w trakcie przeglądania albumu."""
+        import map_page
+
         title = title or row.title
-        if getattr(self, "_map_busy", False):
-            self.toast(tr("Mapa jest już przygotowywana…"))
-            return
-        self._map_busy = True
-        self.toast(tr("Szukam zdjęć z lokalizacją w „{0}”…").format(title))
+        old = getattr(self, "_map_session", None)
+        if old is not None:
+            old.stop = True
+            old.close()
+        labels = {"count": tr("zdjęć na mapie: {0}"), "loading": tr("sprawdzono {0} zdjęć…"),
+                  "none": tr("W tym albumie nie ma zdjęć z lokalizacją")}
+        sess = map_page.MapSession(title, labels, lambda a: self.icloud.fetch(a, "thumb"))
+        sess.stop = False
+        self._map_session = sess
 
-        def progress(k, n):
-            GLib.idle_add(lambda: (self.count.set_text(tr("Mapa: sprawdzono {0} zdjęć…").format(k)), False)[1])
+        def work():
+            def checked(k):
+                sess.checked = k
+            try:
+                for a, lat, lon, name, date in self.icloud.iter_geo(row.album, limit, checked):
+                    if sess.stop:
+                        break
+                    sess.add(a, lat, lon, name, date)
+            except Exception as e:  # noqa: BLE001
+                log.warning("mapa %s:", title, exc_info=True)
+                GLib.idle_add(lambda: (self.toast(tr("Nie udało się przygotować mapy: {0}").format(e)), False)[1])
+            finally:
+                sess.done = True
+                log.info("mapa %s: %d zdjęć z lokalizacją z %d", title, len(sess.points), sess.checked)
 
-        def done(points, err):
-            self._map_busy = False
-            self._update_count()
-            if err:
-                self.toast(tr("Nie udało się przygotować mapy: {0}").format(err))
-                return
-            if not points:
-                self.toast(tr("W tym albumie nie ma zdjęć z lokalizacją"))
-                return
-            import map_page
-            page = CACHE_DIR / "map.html"
-            page.write_text(map_page.build(title, points, {"count": tr("zdjęć na mapie: {0}")}),
-                            encoding="utf-8")
-            Gtk.UriLauncher.new(page.as_uri()).launch(self, None, None)
-            self.toast(tr("Mapa otwarta w przeglądarce ({0} zdjęć)").format(len(points)))
-
-        bg(lambda: self.icloud.geo_points(row.album, limit, progress), done)
+        threading.Thread(target=work, daemon=True).start()
+        Gtk.UriLauncher.new(sess.url).launch(self, None, None)
+        self.toast(tr("Mapa otwarta w przeglądarce - pinezki dochodzą na bieżąco"))
 
     def save_album(self, row):
         dlg = Gtk.FileDialog()
@@ -2618,7 +2692,7 @@ class MainWindow(Adw.ApplicationWindow):
             row = AlbumRow(name, "folder-pictures-symbolic", album, key=name, cover=True)
             self.list_user.append(row)
             cover_rows.append(row)
-        self.exp_user_lbl.set_text(tr("Moje albumy ({0})").format(len(users)))
+        self.exp_user.set_count(len(users))
         self.exp_user.set_visible(bool(users))
         self.new_album_btn.set_visible(PICK is None)
         gen_s = self.gen
