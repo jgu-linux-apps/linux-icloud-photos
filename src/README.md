@@ -1,6 +1,6 @@
 # Linux iCloud Photos
 
-**Current version: 1.0.1 (2026-11-22)**
+**Current version: 1.0.2 (2026-11-22)**
 
 Created by: JGu  
 Supported by Claude
@@ -89,6 +89,7 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Links from other apps: `linux-icloud-photos --open-album "NAME"` opens an album, `--open-date 2025-02-14..2025-02-28` jumps to those days in All Photos. If the app is already open, the request goes to the open window. linux-skytrack uses it for "Open album" and "Photos from the trip days"
 - Bridge for other apps, without a window (`bridge.py`, uses the saved session, never asks for a password or 2FA code): `--albums-json`, `--album-thumbs NAME`, `--range-thumbs --from ISO --to ISO`, `--create-album NAME --from ISO --to ISO` (creates the album or reuses an existing one with that name and adds the photos taken in that time, skipping duplicates), `--create-album NAME --allow-empty` (an empty album, e.g. for a planned trip; with a date range it also creates the album when there are no photos yet). `--drive-upload FILE --drive-folder NAME [--prefix P --keep N]` (0.16.0) uploads a file to a folder in the iCloud Drive root, replacing a file with the same name and keeping only the newest N files that start with the prefix (linux-skytrack backups); error `drive_unavailable` when iCloud Drive is off or has no web access. Results are written as JSON to `--json OUT`; error `login_required` means the app needs to be opened once to sign in
 - Start-up splash screen with the app name and credits, drawn in light or dark to match the system theme (set `ICLOUD_PHOTOS_NO_SPLASH=1` to skip it)
+- Share selected photos and videos (selection bar button or right-click → "Share…"): they are prepared as files ready to send (HEIC → JPEG, videos as H.264, kept in the cache, only the last few shares) and can go to WhazzApp (clipboard + opens the app, then Ctrl+V in the chat), an e-mail with attachments (`xdg-email`), another app, the clipboard or a folder
 - Diagnostic log in `~/.cache/linux-icloud-photos/debug.log`
 - Installs as a `.deb` package with a desktop launcher and icon
 - Flatpak: builds, installs and runs (tested on Ubuntu 26.10 / GNOME 51), including video playback
@@ -182,6 +183,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
+- 1.0.2: Share: the share button in the selection bar and "Share…" in the right-click menu prepare the photos as files ready to send (HEIC converted to JPEG, videos as H.264) and offer WhazzApp (copies them to the clipboard and opens WhazzApp, paste with Ctrl+V in the chat), e-mail with attachments, another app (for one file), copy to clipboard and show in folder.
 - 1.0.1: Map: "What is worth seeing nearby?" button when zoomed in (zoom 11+) opens a side panel on the right with up to 5 places within 10 km of the map centre, each with a photo, a short description and the distance (from Wikipedia in the app language; clicking a place opens its article in the browser). Numbers on photo groups are readable in the dark theme. Nicer right-click menus (icons, rounded, slightly translucent, delete actions in red) in light and dark themes; the glow of the top row of photos is no longer cut off. Photos and videos open in the main window, in place of the grid (like the map), with a "Back" button and Esc to return; videos play in the built-in player there (M still opens mpv). Fixed the error message when the map could not be prepared.
 - 1.0.0: Faster start of All Photos (order correction remembered, first 60 photos shown at once); start-up splash screen (light or dark, following the system theme); Recently Deleted with "Restore" and "Delete forever"; hide and unhide photos; create, rename and delete albums and remove photos from an album; Shared Albums section (view only); save a whole album to a folder; map of an album's photos (OpenStreetMap in the browser); "Map" entry in the left menu (opens at once, pins are added progressively); left menu with Library / Albums / Shared tabs; map inside the main window, muted dark/light; viewer shortcuts `S` (favourite) and `R` (rotate in the viewer). New backend test for these operations.
 - 0.17.10: Deleting photos is confirmed again: the CloudKit record lookup is called with keyword arguments, as pyicloud 2026.10.1 requires (before, the confirmation failed with a TypeError although the photo was deleted).

@@ -88,6 +88,8 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+button.share-opt { padding: 8px 10px; border-radius: 10px; }
+.share-sub { font-size: 0.85em; }
 popover.ctx > contents { border-radius: 14px; padding: 6px; min-width: 230px;
                          background-color: alpha(@popover_bg_color, 0.95);
                          box-shadow: 0 10px 30px alpha(black, 0.28), 0 0 0 1px alpha(currentColor, 0.08); }
@@ -1058,6 +1060,108 @@ class Viewer(Gtk.Window):
             GLib.timeout_add_seconds(4, watchdog)
 
 
+class ShareDialog(Gtk.Window):
+    """Cel udostępnienia przygotowanych plików: WhazzApp, e-mail, inna aplikacja, schowek, folder."""
+
+    def __init__(self, win, paths, errors=()):
+        super().__init__(transient_for=win, modal=True, title=tr("Udostępnij"), resizable=False)
+        self.win, self.paths = win, list(paths)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        for m in ("top", "bottom", "start", "end"):
+            getattr(box, f"set_margin_{m}")(16)
+        head = Gtk.Label(label=tr("Gotowe pliki: {0}").format(len(self.paths))
+                         + (tr(" (pominięto: {0})").format(len(errors)) if errors else ""), xalign=0)
+        head.add_css_class("heading")
+        box.append(head)
+
+        def opt(icon, title, sub, cb, sensitive=True):
+            b = Gtk.Button()
+            b.add_css_class("flat")
+            b.add_css_class("share-opt")
+            row = Gtk.Box(spacing=12)
+            img = Gtk.Image.new_from_icon_name(icon)
+            img.set_pixel_size(24)
+            row.append(img)
+            col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            t = Gtk.Label(label=title, xalign=0)
+            t.add_css_class("heading")
+            col.append(t)
+            d = Gtk.Label(label=sub, xalign=0, wrap=True)
+            d.set_max_width_chars(42)
+            d.add_css_class("dim-label")
+            d.add_css_class("share-sub")
+            col.append(d)
+            row.append(col)
+            b.set_child(row)
+            b.set_sensitive(sensitive)
+            b.connect("clicked", lambda *_: cb())
+            box.append(b)
+
+        wa = shutil.which("linux-whazzapp")
+        opt("chat-message-new-symbolic", "WhazzApp",
+            tr("Kopiuje zdjęcia do schowka i otwiera WhazzApp - w czacie naciśnij Ctrl+V") if wa
+            else tr("WhazzApp nie jest zainstalowany"), self._whazzapp, bool(wa))
+        opt("mail-send-symbolic", tr("E-mail"), tr("Nowa wiadomość z załącznikami w programie pocztowym"),
+            self._email, bool(shutil.which("xdg-email")))
+        opt("application-x-executable-symbolic", tr("Inna aplikacja…"),
+            tr("Wybierz aplikację, w której otworzyć plik") if len(self.paths) == 1
+            else tr("Dostępne dla jednego pliku - przy wielu użyj schowka albo folderu"),
+            self._other, len(self.paths) == 1)
+        opt("edit-copy-symbolic", tr("Kopiuj do schowka"), tr("Wklej (Ctrl+V) w dowolnym czacie, mailu albo w Plikach"),
+            self._copy)
+        opt("folder-open-symbolic", tr("Pokaż w folderze"), tr("Otwiera folder z przygotowanymi plikami"), self._folder)
+        close = Gtk.Button(label=tr("Zamknij"), halign=Gtk.Align.END)
+        close.set_margin_top(6)
+        close.connect("clicked", lambda *_: self.close())
+        box.append(close)
+        self.set_child(box)
+
+    def _files(self):
+        return [Gio.File.new_for_path(p) for p in self.paths]
+
+    def _copy(self, close=True):
+        files = self._files()
+        uris = "".join(f.get_uri() + "\r\n" for f in files)
+        prov = Gdk.ContentProvider.new_union([
+            Gdk.ContentProvider.new_for_value(Gdk.FileList.new_from_list(files)),
+            Gdk.ContentProvider.new_for_bytes("text/uri-list", GLib.Bytes.new(uris.encode())),
+            Gdk.ContentProvider.new_for_bytes("x-special/gnome-copied-files",
+                                              GLib.Bytes.new(("copy\n" + uris.replace("\r\n", "\n")).encode())),
+        ])
+        self.win.get_clipboard().set_content(prov)
+        self.win.toast(tr("Skopiowano do schowka: {0} - wklej Ctrl+V").format(len(files)))
+        if close:
+            self.close()
+
+    def _whazzapp(self):
+        self._copy(close=False)
+        try:
+            subprocess.Popen(["linux-whazzapp"], start_new_session=True)
+        except OSError as e:
+            self.win.toast(tr("Nie udało się otworzyć WhazzApp: {0}").format(e))
+        self.close()
+
+    def _email(self):
+        args = ["xdg-email"]
+        for p in self.paths:
+            args += ["--attach", p]
+        try:
+            subprocess.Popen(args, start_new_session=True)
+        except OSError as e:
+            self.win.toast(tr("Nie udało się otworzyć poczty: {0}").format(e))
+        self.close()
+
+    def _other(self):
+        launcher = Gtk.FileLauncher.new(self._files()[0])
+        launcher.set_always_ask(True)
+        launcher.launch(self.win, None, None)
+        self.close()
+
+    def _folder(self):
+        Gtk.FileLauncher.new(self._files()[0]).open_containing_folder(self.win, None, None)
+        self.close()
+
+
 class EmbeddedViewer(Viewer):
     """Podgląd zdjęcia / filmu w głównym oknie, po prawej, w miejscu siatki (jak mapa).
     Korzysta z całej logiki Viewer; zamiast osobnego okna jego zawartość trafia do main_stack.
@@ -1913,6 +2017,7 @@ def _ctx_icons():
         tr("Pokaz slajdów od tego zdjęcia"): "media-playback-start-symbolic",
         tr("Odtwórz w mpv"): "media-playback-start-symbolic",
         tr("Wyślij na TV"): "video-display-symbolic",
+        tr("Udostępnij…"): "emblem-shared-symbolic",
         tr("Zapisz oryginał jako…"): "document-save-symbolic",
         tr("Kopiuj nazwę pliku"): "edit-copy-symbolic",
         tr("Ukryj"): "view-conceal-symbolic",
@@ -2850,6 +2955,36 @@ class MainWindow(Adw.ApplicationWindow):
         self.wtitle.set_title(tr("Mapa"))
         self.wtitle.set_subtitle(getattr(self, "_map_title", "") or "")
 
+    # --- udostępnianie: pliki w formacie dobrym do wysłania + wybór celu ---
+    def share(self, assets):
+        assets = [a for a in (assets or []) if a is not None]
+        if not assets:
+            return
+        import time as _t
+        folder = CACHE_DIR / "share" / _t.strftime("%Y%m%d-%H%M%S")
+        folder.mkdir(parents=True, exist_ok=True)
+        old = sorted((CACHE_DIR / "share").iterdir())[:-5]  # zostaw tylko kilka ostatnich udostępnień
+        for d in old:
+            shutil.rmtree(d, ignore_errors=True)
+        self.toast(tr("Przygotowuję {0} do udostępnienia…").format(len(assets)))
+
+        def progress(k, n):
+            GLib.idle_add(lambda: (self.count.set_text(tr("Udostępnianie {0}/{1}…").format(k, n)), False)[1])
+
+        def done(res, err):
+            self._update_count()
+            items, errors = res if res else ([], [str(err)])
+            paths = [it["path"] for it in items if it.get("path")]
+            if errors:
+                log.error("udostępnianie: %s", errors)
+            if not paths:
+                self.toast(tr("Nie udało się przygotować plików: {0}").format(errors[0] if errors else "?"))
+                return
+            ShareDialog(self, paths, errors).present()
+
+        bg(lambda: pick.export_assets(self.icloud, assets, str(folder), progress=progress,
+                                      converter=pick.heic_to_jpeg_bytes), done)
+
     def save_album(self, row):
         dlg = Gtk.FileDialog()
         dlg.set_title(tr("Wybierz folder na album „{0}”").format(row.title))
@@ -3759,6 +3894,7 @@ class MainWindow(Adw.ApplicationWindow):
         box.append(Gtk.Separator())
         if obj.is_video:
             item(tr("Odtwórz w mpv"), lambda: self.play_external(obj))
+        item(tr("Udostępnij…"), lambda: self.share(targets()))
         item(tr("Wyślij na TV"), lambda: self.cast_from_menu(obj.asset))
         item(tr("Zapisz oryginał jako…"), lambda: self.save_original(obj))
         item(tr("Kopiuj nazwę pliku"), lambda: (
@@ -4092,6 +4228,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.restore_btn.add_css_class("suggested-action")
         bar.pack_end(self.restore_btn)
         bar.pack_end(button(tr("Zapisz oryginały…"), self._sel_save))
+        self.share_btn = button("", lambda: self.share(self._sel_assets()), "emblem-shared-symbolic",
+                                tr("Udostępnij (WhazzApp, e-mail, inne aplikacje)"))
+        bar.pack_end(self.share_btn)
         self.unhide_btn = button(tr("Odkryj"), lambda: self._sel_hidden(False))
         bar.pack_end(self.unhide_btn)
         self.hide_btn = button("", lambda: self._sel_hidden(True), "view-conceal-symbolic",
