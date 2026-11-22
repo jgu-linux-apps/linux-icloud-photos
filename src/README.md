@@ -1,6 +1,6 @@
 # Linux iCloud Photos
 
-**Current version: 1.0.0 (2026-11-22)**
+**Current version: 1.0.1 (2026-11-22)**
 
 Created by: JGu  
 Supported by Claude
@@ -82,6 +82,7 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Shared albums: a "Shared albums (N)" section in the left menu lists the iCloud Shared Albums you own or were invited to; they can be viewed, played, cast and saved, but not changed from this app
 - Save a whole album: right-click an album in the left menu → "Save the whole album to a folder…" (a subfolder with the album name; existing files are not overwritten)
 - Map: "Map" in the Library tab shows the whole library, and right-click on an album → "Show photos on a map" shows just that album. The map replaces the photo grid in the main window (WebKitGTK; without it, it opens in the browser) and the pins are added while the app goes through the photos (grouped when zoomed out). iCloud cannot search photos by place, so the app reads the whole library, in 12 parallel parts (about 45 s for 14,000 photos, the first pins after a few seconds); clicking a group (the number) or a single pin shows those photos in the photo grid, with a "Back to the map" button; hovering a pin shows the file name and date. The map is muted to keep the pins readable: dark navy with outlines in a dark theme, grey in a light theme. Locations come from the photo metadata stored in iCloud ({GPS}), no photo files are downloaded. The points found are remembered, so the next time the map shows them immediately and only adds new photos. The page is served by the app on 127.0.0.1 only (random port and address) and loads the OpenStreetMap tiles and the Leaflet library from the internet
+- Nearby places on the map: when you zoom in, "What is worth seeing nearby?" opens a panel on the right with up to 5 sights near the map centre (photo, short description, distance), taken from Wikipedia in the app language. Only the map centre coordinates are sent to Wikipedia, and only when you click the button
 - Viewer shortcuts and buttons: `S` (or the star button) adds to or removes from favourites, `R` / `Shift+R` (or the rotate button) rotates the photo in the viewer only (the photo in iCloud is not changed), `I` shows information
 - The pinned library versions (pyicloud, keyring, PyChromecast, pyatv) are the ones the app was tested with; the app warns if the installed pyicloud differs
 - Picker mode for other apps (`--pick`): `linux-icloud-photos --pick --pick-out result.json --pick-dir DIR [--pick-max 30]` opens the app with a read-only library (no delete, favourite, album or upload actions). You select photos and videos and click "Choose"; they are exported to DIR (JPEG/PNG/GIF unchanged, HEIC converted to JPEG, videos as H.264, Live Photos as a still photo) and listed in the JSON file. Exit code 0 = files chosen, 1 = cancelled. linux-whazzapp uses it for "Photos & videos" in the WhatsApp attach menu
@@ -181,6 +182,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
+- 1.0.1: Map: "What is worth seeing nearby?" button when zoomed in (zoom 11+) opens a side panel on the right with up to 5 places within 10 km of the map centre, each with a photo, a short description and the distance (from Wikipedia in the app language; clicking a place opens its article in the browser). Numbers on photo groups are readable in the dark theme. Fixed the error message when the map could not be prepared.
 - 1.0.0: Faster start of All Photos (order correction remembered, first 60 photos shown at once); start-up splash screen (light or dark, following the system theme); Recently Deleted with "Restore" and "Delete forever"; hide and unhide photos; create, rename and delete albums and remove photos from an album; Shared Albums section (view only); save a whole album to a folder; map of an album's photos (OpenStreetMap in the browser); "Map" entry in the left menu (opens at once, pins are added progressively); left menu with Library / Albums / Shared tabs; map inside the main window, muted dark/light; viewer shortcuts `S` (favourite) and `R` (rotate in the viewer). New backend test for these operations.
 - 0.17.10: Deleting photos is confirmed again: the CloudKit record lookup is called with keyword arguments, as pyicloud 2026.10.1 requires (before, the confirmation failed with a TypeError although the photo was deleted).
 - 0.17.9: Apple can keep answering the library indexing check with “FAILED” while iCloud.com shows the photos normally; the app now ignores that state (and logs it) instead of refusing to load the albums.

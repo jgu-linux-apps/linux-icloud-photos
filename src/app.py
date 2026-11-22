@@ -2600,8 +2600,14 @@ class MainWindow(Adw.ApplicationWindow):
         if old is not None:
             old.stop = True
             old.close()
+        import i18n
         labels = {"count": tr("zdjęć na mapie: {0}"), "loading": tr("sprawdzono {0} zdjęć…"),
-                  "none": tr("W tym albumie nie ma zdjęć z lokalizacją")}
+                  "none": tr("W tym albumie nie ma zdjęć z lokalizacją"),
+                  "lang": i18n.LANG if i18n.LANG in ("pl", "en", "de", "uk") else "en",
+                  "nearby": tr("Co warto zwiedzić w pobliżu?"), "nb_loading": tr("Szukam ciekawych miejsc…"),
+                  "nb_none": tr("W pobliżu nie znaleziono opisanych miejsc"),
+                  "nb_source": tr("Źródło: Wikipedia, do 10 km od środka mapy"),
+                  "nb_error": tr("Nie udało się pobrać miejsc (brak internetu?)")}
         sess = map_page.MapSession(title, labels, lambda a: self.icloud.fetch(a, "thumb"))
         sess.stop = False
         self._map_session = sess
@@ -2636,7 +2642,8 @@ class MainWindow(Adw.ApplicationWindow):
                         pass
             except Exception as e:  # noqa: BLE001
                 log.warning("mapa %s:", title, exc_info=True)
-                GLib.idle_add(lambda: (self.toast(tr("Nie udało się przygotować mapy: {0}").format(e)), False)[1])
+                msg = tr("Nie udało się przygotować mapy: {0}").format(e)
+                GLib.idle_add(lambda: (self.toast(msg), False)[1])
             finally:
                 sess.done = True
                 log.info("mapa %s: %d zdjęć z lokalizacją z %d", title, len(sess.points), sess.checked)
@@ -2661,6 +2668,19 @@ class MainWindow(Adw.ApplicationWindow):
             ucm = self._map_web.get_user_content_manager()
             ucm.register_script_message_handler("photos", None)
             ucm.connect("script-message-received::photos", self._on_map_photos)
+
+            def policy(_view, decision, kind):
+                # linki z panelu „w pobliżu” (nowe okno / zewnętrzny adres): w przeglądarce systemu
+                if kind in (WebKit.PolicyDecisionType.NEW_WINDOW_ACTION,
+                            WebKit.PolicyDecisionType.NAVIGATION_ACTION):
+                    uri = decision.get_navigation_action().get_request().get_uri()
+                    if uri and not uri.startswith("http://127.0.0.1"):
+                        Gtk.UriLauncher.new(uri).launch(self, None, None)
+                        decision.ignore()
+                        return True
+                return False
+
+            self._map_web.connect("decide-policy", policy)
             self._map_web.set_vexpand(True)
             self._map_web.set_hexpand(True)
             box.append(self._map_web)

@@ -23,6 +23,8 @@ def build(title: str, labels: dict, points_url: str = "points", thumb_url: str =
     tile_filter = ("invert(1) hue-rotate(200deg) brightness(0.78) contrast(1.15) saturate(0.35)" if dark
                    else "grayscale(0.9) brightness(1.04) contrast(0.82)")
     acc = "#22d3ee" if dark else "#7c5cff"
+    acc_fg = "#06121f" if dark else "#ffffff"  # na jasnym turkusie liczby muszą być ciemne
+    lang = labels.get("lang", "en")
     bar_bg, bar_fg = ("#161a2e", "#ecebff") if dark else ("#ffffff", "#1f1a3a")
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -37,16 +39,34 @@ border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.25);font-size:14px}}
 .leaflet-container{{background:{"#0e1016" if dark else "#f2f2f0"}}}
 .leaflet-tile-pane{{filter:{tile_filter}}}
 .marker-cluster,.marker-cluster div{{background:transparent}}
-.marker-cluster div{{background:{acc};color:#fff;font-weight:700;border:2px solid #fff;
+.marker-cluster div{{background:{acc};color:{acc_fg};font-weight:800;border:2px solid #fff;
 box-shadow:0 0 0 4px {acc}55}}
 .pp img{{display:block;width:180px;max-height:180px;object-fit:cover;border-radius:6px;margin-bottom:4px;
 background:#eee;min-height:120px}}
 .pp{{font-size:13px}}
+#nb{{position:absolute;z-index:1000;top:10px;right:10px;background:{acc};color:{acc_fg};border:none;
+border-radius:999px;padding:8px 14px;font:600 14px system-ui;box-shadow:0 2px 10px rgba(0,0,0,.3);cursor:pointer;display:none}}
+#panel{{position:absolute;z-index:1001;top:0;right:0;bottom:0;width:340px;max-width:85%;background:{bar_bg};color:{bar_fg};
+box-shadow:-4px 0 18px rgba(0,0,0,.3);transform:translateX(105%);transition:transform .25s ease;overflow:auto;
+font-family:system-ui}}
+#panel.open{{transform:none}}
+#panel h3{{margin:0;padding:14px 44px 6px 16px;font-size:16px}}
+#panel .x{{position:absolute;top:8px;right:10px;background:none;border:none;color:inherit;font-size:22px;cursor:pointer}}
+#panel .st{{padding:0 16px 8px;font-size:12px;opacity:.7}}
+.card{{display:block;margin:8px 12px;border-radius:12px;overflow:hidden;background:{"#1f2440" if dark else "#f3f1ff"};
+color:inherit;text-decoration:none}}
+.card img{{width:100%;height:150px;object-fit:cover;display:block;background:#888}}
+.card b{{display:block;padding:8px 12px 2px;font-size:14px}}
+.card p{{margin:0;padding:0 12px 10px;font-size:12.5px;line-height:1.4;opacity:.85}}
+.card .d{{padding:0 12px 10px;font-size:11px;opacity:.6}}
 .gal{{display:grid;grid-template-columns:repeat(4,96px);gap:4px;max-height:320px;overflow:auto}}
 .gal img{{width:96px;height:96px;object-fit:cover;border-radius:6px;background:#ccc}}
 </style></head><body>
 <div id="bar"><b>{t}</b> · <span id="st"></span></div>
 <div id="map"></div>
+<button id="nb">{html.escape(labels.get("nearby", "Nearby"))}</button>
+<div id="panel"><button class="x" aria-label="close">×</button><h3>{html.escape(labels.get("nearby", "Nearby"))}</h3>
+<div class="st" id="pst"></div><div id="cards"></div></div>
 <script src="{LEAFLET}/leaflet.js"></script>
 <script src="{CLUSTER}/leaflet.markercluster.js"></script>
 <script>
@@ -93,6 +113,46 @@ async function poll() {{
   if (!r.done) setTimeout(poll, 1200);
 }}
 poll();
+const nb = document.getElementById('nb'), panel = document.getElementById('panel');
+const NB_ZOOM = 11;
+function nbVis() {{ nb.style.display = map.getZoom() >= NB_ZOOM && !panel.classList.contains('open') ? 'block' : 'none'; }}
+map.on('zoomend', nbVis); nbVis();
+panel.querySelector('.x').onclick = () => {{ panel.classList.remove('open'); nbVis(); }};
+const GOOD = /(kości|katedr|bazylik|zamek|zamk|pałac|dwór|muze|pomnik|brama|baszt|wież|ratusz|park|ogród|teatr|kaplic|klasztor|opactw|twierdz|fort|latarn|plaż|molo|rynek|stare miasto|zabyt|church|cathedral|basilica|castle|palace|museum|monument|gate|tower|town hall|garden|theatre|chapel|abbey|monastery|fortress|lighthouse|beach|pier|square|old town|kirche|burg|schloss|denkmal|turm|rathaus|garten|kloster|leuchtturm|strand|altstadt|церкв|собор|замок|палац|музе|пам.ятник|брам|вежа|ратуш|парк|сад|театр|монастир|фортец|маяк|пляж)/i;
+const BAD = /(akademi|uniwersytet|politechnik|wydział|szkoła|liceum|związek|stowarzysz|spółka|przedsiębior|stacja kolej|przystan|ulica|osiedle|dzielnic|parafia|university|faculty|school|association|company|station|street|district|parish|universität|schule|verein|gesellschaft|bahnhof|straße|університет|школа|асоціац|компан|станці|вулиц)/i;
+function km(a, b) {{ return map.distance(a, b) / 1000; }}
+async function nearby() {{
+  panel.classList.add('open'); nbVis();
+  const c = map.getCenter(), cards = document.getElementById('cards'), pst = document.getElementById('pst');
+  cards.innerHTML = ''; pst.textContent = LAB.nb_loading;
+  const u = 'https://{lang}.wikipedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch'
+    + `&ggscoord=${{c.lat}}|${{c.lng}}&ggsradius=10000&ggslimit=40&prop=pageimages|extracts|coordinates|info&coprop=type`
+    + '&inprop=url&piprop=thumbnail&pithumbsize=400&exintro=1&explaintext=1&exsentences=2&exlimit=40';
+  try {{
+    const r = await (await fetch(u)).json();
+    let pages = Object.values((r.query || {{}}).pages || {{}});
+    const score = p => {{
+      const t = (p.title + ' ' + p.extract.slice(0, 120)).toLowerCase(), ty = p.coordinates[0].type;
+      let s = (ty === 'landmark' ? 3 : ty === 'building' ? 2 : 0);
+      if (GOOD.test(t)) s += 3;
+      if (BAD.test(t) || ['city', 'adm1st', 'adm2nd', 'country'].includes(ty)) s -= 6;
+      return s;
+    }};
+    pages = pages.filter(p => p.thumbnail && p.extract && p.coordinates).map(p => [score(p),
+      km(c, [p.coordinates[0].lat, p.coordinates[0].lon]), p]).filter(x => x[0] > -3)
+      .sort((a, b) => (b[0] - a[0]) || (a[1] - b[1])).slice(0, 5).map(x => x[2]);
+    if (!pages.length) {{ pst.textContent = LAB.nb_none; return; }}
+    pst.textContent = LAB.nb_source;
+    for (const p of pages) {{
+      const d = km(c, [p.coordinates[0].lat, p.coordinates[0].lon]);
+      const a = document.createElement('a'); a.className = 'card'; a.href = p.fullurl; a.target = '_blank';
+      a.innerHTML = `<img src="${{p.thumbnail.source}}" alt=""><b>${{esc(p.title)}}</b><p>${{esc(p.extract)}}</p>`
+        + `<div class="d">${{d.toFixed(1)}} km</div>`;
+      cards.appendChild(a);
+    }}
+  }} catch (e) {{ pst.textContent = LAB.nb_error; }}
+}}
+nb.onclick = nearby;
 </script></body></html>
 """
 
