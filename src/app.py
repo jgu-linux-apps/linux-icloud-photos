@@ -82,6 +82,7 @@ ROW_GAP = 4
 POOL = ThreadPoolExecutor(max_workers=6)
 COVER_POOL = ThreadPoolExecutor(max_workers=3)
 BATCH = 300
+FIRST_BATCH = 60
 SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
@@ -1912,7 +1913,9 @@ class MainWindow(Adw.ApplicationWindow):
         self.tiles = weakref.WeakSet()
         self._tguard = False
         self.newest_first = bool(cfg.get("newest_first", True))
-        self.flips = {}            # tytuł albumu -> czy odwrócić założony kierunek
+        # tytuł albumu -> czy odwrócić założony kierunek; zapamiętane między uruchomieniami, żeby nie ładować
+        # „Wszystkich zdjęć” dwa razy przy każdym starcie (Apple podaje je w odwrotnej kolejności niż inne albumy)
+        self.flips = dict(cfg.get("flips", {}))
         self.cur_album = None
         self.cur_title = ""
         self.it = None
@@ -3242,13 +3245,16 @@ class MainWindow(Adw.ApplicationWindow):
             return
         self.loading = True
         it = self.it
+        # pierwsza porcja mała: zdjęcia pojawiają się po jednym-dwóch zapytaniach, reszta dochodzi w tle
+        have = self.store.get_n_items()
+        size = FIRST_BATCH if have == 0 else (BATCH - have if have < BATCH else BATCH)
 
         def work():
             batch = []
             for asset in it:
                 batch.append(PhotoObj(asset, self.icloud.is_video(asset),
                                       self.icloud.is_live(asset)))
-                if len(batch) >= BATCH:
+                if len(batch) >= size:
                     return batch, False
             return batch, True  # iterator się skończył
 
@@ -3268,7 +3274,10 @@ class MainWindow(Adw.ApplicationWindow):
                 self.store.splice(self.store.get_n_items(), 0, batch)
             self.exhausted = finished
             self._update_count()
-            GLib.timeout_add(200, self._maybe_more)
+            if not finished and self.store.get_n_items() < BATCH:
+                GLib.idle_add(lambda: (self._load_more(gen), False)[1])  # dokończ pierwszą porcję od razu
+            else:
+                GLib.timeout_add(200, self._maybe_more)
 
         bg(work, done)
 
@@ -3284,6 +3293,7 @@ class MainWindow(Adw.ApplicationWindow):
             return False
         if (d0 > d1) != self.newest_first:
             self.flips[self.cur_title] = not self.flips.get(self.cur_title, False)
+            save_cfg(flips=self.flips)
             log.warning("kolejność albumu %r odwrotna niż żądana - ładuję ponownie",
                         self.cur_title)
             self.load_album(self.cur_album, _auto=True)
@@ -3321,7 +3331,6 @@ class MainWindow(Adw.ApplicationWindow):
     def _toggle_sort(self, *_):
         self.newest_first = not self.newest_first
         save_cfg(newest_first=self.newest_first)
-        self.flips.clear()
         self._update_sort_btn()
         if self.cur_album is not None:
             self.load_album(self.cur_album)

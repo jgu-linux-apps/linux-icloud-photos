@@ -41,9 +41,9 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Section titles and "All Photos" are bold; app version and date are shown at the bottom of the menu
 - Resizable divider between the menu and the photo grid (the width is remembered), menu can be hidden
 - Newest photos first, including the "All Photos" library of 12,000+ items
-- Photos load in batches of 300 while you scroll
+- Photos load in batches of 300 while you scroll; the first 60 are shown as soon as they arrive, so the grid fills quickly after start
 - Sort toggle (newest/oldest first) that remembers your choice
-- Automatic correction of albums that Apple returns in the opposite order
+- Automatic correction of albums that Apple returns in the opposite order; the correction is remembered, so All Photos is not loaded twice at every start
 - Grid zoom slider (− / +), Ctrl +, Ctrl −, Ctrl 0 and Ctrl + mouse wheel
 - Grid view presets: small, standard, large, extra large
 - Grid option "Original proportions" shows whole photos without cropping
@@ -181,7 +181,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
-- 1.0.0: Start-up splash screen (light or dark, following the system theme); Recently Deleted with "Restore" and "Delete forever"; hide and unhide photos; create, rename and delete albums and remove photos from an album; Shared Albums section (view only); save a whole album to a folder; map of an album's photos (OpenStreetMap in the browser); "Map" entry in the left menu (opens at once, pins are added progressively); left menu with Library / Albums / Shared tabs; map inside the main window, muted dark/light; viewer shortcuts `S` (favourite) and `R` (rotate in the viewer). New backend test for these operations.
+- 1.0.0: Faster start of All Photos (order correction remembered, first 60 photos shown at once); start-up splash screen (light or dark, following the system theme); Recently Deleted with "Restore" and "Delete forever"; hide and unhide photos; create, rename and delete albums and remove photos from an album; Shared Albums section (view only); save a whole album to a folder; map of an album's photos (OpenStreetMap in the browser); "Map" entry in the left menu (opens at once, pins are added progressively); left menu with Library / Albums / Shared tabs; map inside the main window, muted dark/light; viewer shortcuts `S` (favourite) and `R` (rotate in the viewer). New backend test for these operations.
 - 0.17.10: Deleting photos is confirmed again: the CloudKit record lookup is called with keyword arguments, as pyicloud 2026.10.1 requires (before, the confirmation failed with a TypeError although the photo was deleted).
 - 0.17.9: Apple can keep answering the library indexing check with “FAILED” while iCloud.com shows the photos normally; the app now ignores that state (and logs it) instead of refusing to load the albums.
 - 0.17.8: The library indexing check logs what Apple returned and, when the new CloudKit client does not read “FINISHED”, asks again with the plain REST query (iCloud.com showed the photos while the app reported “not finished indexing”).
