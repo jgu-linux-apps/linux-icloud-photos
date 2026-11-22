@@ -38,6 +38,9 @@ for f in files:
         if any(isinstance(a, ast.Call) and isinstance(a.func, ast.Name) and a.func.id == 'tr' for a in anc(n)): continue
         if any(isinstance(a, ast.JoinedStr) for a in anc(n)) and not isinstance(n, ast.JoinedStr): continue
         if s in ('zdjęcie','zdjęcia','zdjęć','paź'): continue
+        par = parents.get(id(n))
+        if isinstance(par, ast.Assign) and all(isinstance(x, ast.Name) and x.id.endswith('_RE') for x in par.targets):
+            continue  # stałe *_RE to wyrażenia regularne (np. słowa kluczowe miejsc), nie tekst interfejsu
         if PLCH.search(s) and not re.search(r"\[a-z", s):      # pomiń wyrażenia regularne
             problems.append(f"{f}:{n.lineno}: polski napis poza tr(): {s[:70]!r}")
 missing = [k for k in used if k not in i18n.EN]

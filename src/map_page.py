@@ -10,6 +10,9 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+# słowa w tytułach artykułów: atrakcje (wyżej) i instytucje/ulice (niżej) - pl, en, de, uk
+PLACES_GOOD_RE = r"(kości|katedr|bazylik|zamek|zamk|pałac|dwór|muze|pomnik|brama|baszt|wież|ratusz|park|ogród|teatr|kaplic|klasztor|opactw|twierdz|fort|latarn|plaż|molo|rynek|stare miasto|zabyt|church|cathedral|basilica|castle|palace|museum|monument|gate|tower|town hall|garden|theatre|chapel|abbey|monastery|fortress|lighthouse|beach|pier|square|old town|kirche|burg|schloss|denkmal|turm|rathaus|garten|kloster|leuchtturm|strand|altstadt|церкв|собор|замок|палац|музе|пам.ятник|брам|вежа|ратуш|парк|сад|театр|монастир|фортец|маяк|пляж)"
+PLACES_BAD_RE = r"(akademi|uniwersytet|politechnik|wydział|szkoła|liceum|związek|stowarzysz|spółka|przedsiębior|stacja kolej|przystan|ulica|osiedle|dzielnic|parafia|university|faculty|school|association|company|station|street|district|parish|universität|schule|verein|gesellschaft|bahnhof|straße|університет|школа|асоціац|компан|станці|вулиц)"
 LEAFLET = "https://unpkg.com/leaflet@1.9.4/dist"
 CLUSTER = "https://unpkg.com/leaflet.markercluster@1.5.3/dist"
 
@@ -118,8 +121,8 @@ const NB_ZOOM = 11;
 function nbVis() {{ nb.style.display = map.getZoom() >= NB_ZOOM && !panel.classList.contains('open') ? 'block' : 'none'; }}
 map.on('zoomend', nbVis); nbVis();
 panel.querySelector('.x').onclick = () => {{ panel.classList.remove('open'); nbVis(); }};
-const GOOD = /(kości|katedr|bazylik|zamek|zamk|pałac|dwór|muze|pomnik|brama|baszt|wież|ratusz|park|ogród|teatr|kaplic|klasztor|opactw|twierdz|fort|latarn|plaż|molo|rynek|stare miasto|zabyt|church|cathedral|basilica|castle|palace|museum|monument|gate|tower|town hall|garden|theatre|chapel|abbey|monastery|fortress|lighthouse|beach|pier|square|old town|kirche|burg|schloss|denkmal|turm|rathaus|garten|kloster|leuchtturm|strand|altstadt|церкв|собор|замок|палац|музе|пам.ятник|брам|вежа|ратуш|парк|сад|театр|монастир|фортец|маяк|пляж)/i;
-const BAD = /(akademi|uniwersytet|politechnik|wydział|szkoła|liceum|związek|stowarzysz|spółka|przedsiębior|stacja kolej|przystan|ulica|osiedle|dzielnic|parafia|university|faculty|school|association|company|station|street|district|parish|universität|schule|verein|gesellschaft|bahnhof|straße|університет|школа|асоціац|компан|станці|вулиц)/i;
+const GOOD = /{PLACES_GOOD_RE}/i;
+const BAD = /{PLACES_BAD_RE}/i;
 function km(a, b) {{ return map.distance(a, b) / 1000; }}
 async function nearby() {{
   panel.classList.add('open'); nbVis();
