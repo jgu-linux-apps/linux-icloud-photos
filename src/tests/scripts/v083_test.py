@@ -171,7 +171,9 @@ class T(Adw.Application):
         for v in tl(A.Viewer): v.close()
         for v in list(w.viewers): v.close()   # podgląd w głównym oknie (1.0.1+) zamyka się tak samo
         self._rec = rec
-        later(900, self.e3)  # siatka musi się znów ułożyć po zamknięciu podglądu
+        w.main_stack.set_transition_type(Gtk.StackTransitionType.NONE)
+        w.main_stack.set_visible_child_name("grid")
+        later(2000, self.e3)  # siatka musi się znów ułożyć po zamknięciu podglądu
     def e3(self):
         w=self.win; rec=self._rec; T_=self.tiles()
         # zaznaczanie w rzędach: klik i ramka
