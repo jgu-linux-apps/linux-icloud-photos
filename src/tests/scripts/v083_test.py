@@ -175,9 +175,12 @@ class T(Adw.Application):
         w.main_stack.set_visible_child_name("grid")
         later(2000, self.e3)  # siatka musi się znów ułożyć po zamknięciu podglądu
     def e3(self):
-        w=self.win; T_=self.tiles(); rec=T_[2] if len(T_)>2 else self._rec  # pozycje po ponownym ułożeniu siatki
+        # tryb zaznaczania pokazuje znaczniki i pasek u dołu - rzędy układają się od nowa, więc mierzymy po chwili
+        self.win.select_btn.set_active(True); later(900, self.e3b)
+    def e3b(self):
+        w=self.win; T_=self.tiles(); rec=T_[2] if len(T_)>2 else self._rec
         # zaznaczanie w rzędach: klik i ramka
-        w.select_btn.set_active(True); c=self.centre(rec); g=G(); w._rb_begin(g,*c); w._rb_end(g,0,0)
+        c=self.centre(rec); g=G(); w._rb_begin(g,*c); w._rb_end(g,0,0)
         step("E3_click_selects_in_rows", lambda: len(w.selected))
         a_,b_=self.centre(T_[0]), self.centre(T_[min(5,len(T_)-1)]); g=G(); w._rb_begin(g,*a_); w._rb_update(g,b_[0]-a_[0],b_[1]-a_[1]); w._rb_end(g,0,0)
         step("E4_rubberband_in_rows", lambda: len(w.selected)>1)
