@@ -88,6 +88,9 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+.section-head { padding: 14px 24px 2px 24px; }
+.section-title { font-size: 1.9em; font-weight: 800; letter-spacing: -0.01em; }
+.section-sub { font-size: 1.05em; opacity: 0.6; }
 button.albumcard { padding: 6px; border-radius: 14px; }
 .albumcard-pic { border-radius: 12px; background-color: alpha(currentColor, 0.08); }
 button.share-opt { padding: 8px 10px; border-radius: 10px; }
@@ -2505,13 +2508,17 @@ class MainWindow(Adw.ApplicationWindow):
         if key in ("albums", "shared"):
             self._show_album_grid(self.list_user if key == "albums" else self.list_shared,
                                   tr("Albumy") if key == "albums" else tr("Wspólne"))
-        elif self.main_stack.get_visible_child_name() == "albums":
-            row = self.list_primary.get_selected_row() or self.list_primary.get_row_at_index(0)
-            self.main_stack.set_visible_child_name("grid")
-            if row is not None and self.cur_album is None:
-                row.get_parent().select_row(row)
-            elif self.cur_title:
-                self.wtitle.set_title(self.cur_title)
+        else:
+            # Biblioteka: zawsze wracamy do „Wszystkich zdjęć” (nie zostajemy w ostatnio otwartym albumie)
+            self.albums_back.set_visible(False)
+            row = self.list_primary.get_row_at_index(0)
+            if row is not None:
+                if self.list_primary.get_selected_row() is row and self.cur_album is row.album:
+                    self.main_stack.set_visible_child_name("grid")
+                    self.wtitle.set_title(row.title)
+                    self._set_section(tr("Biblioteka"), row.title)
+                else:
+                    row.get_parent().select_row(row)
 
     # --- zakładki Albumy / Wspólne: kafelki albumów po prawej, zdjęcia dopiero po kliknięciu albumu ---
     def _show_album_grid(self, lb, title):
@@ -2539,7 +2546,20 @@ class MainWindow(Adw.ApplicationWindow):
         self.main_stack.set_visible_child_name("albums")
         self.wtitle.set_title(title)
         self.wtitle.set_subtitle(tr("{0} albumów").format(len(rows)) if rows else "")
+        self._set_section(title, tr("{0} albumów").format(len(rows)) if rows else "")
         self.count.set_text("")
+
+    def _set_section(self, title, sub=""):
+        if hasattr(self, "sec_title"):
+            self.sec_title.set_text(title)
+            self.sec_sub.set_text(sub or "")
+
+    def _section_for_list(self, lb):
+        if lb is getattr(self, "list_user", None):
+            return tr("Albumy")
+        if lb is getattr(self, "list_shared", None):
+            return tr("Wspólne")
+        return tr("Biblioteka")
 
     def _open_album_card(self, row):
         lb = row.get_parent()
@@ -2656,7 +2676,7 @@ class MainWindow(Adw.ApplicationWindow):
                 b.set_group(first)
             b.connect("toggled", lambda btn, k=key: btn.get_active() and self._show_tab(k))
             # klik w już aktywną zakładkę (np. zapamiętaną przy starcie) też pokazuje jej widok
-            b.connect("clicked", lambda btn, k=key: btn.get_active() and k != "lib"
+            b.connect("clicked", lambda btn, k=key: btn.get_active()
                       and self.side_stack.get_visible_child_name() == k and self._show_tab(k))
             tabs.append(b)
             self.tab_btns[key] = b
@@ -2758,6 +2778,19 @@ class MainWindow(Adw.ApplicationWindow):
         self.main_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=150)
         self.main_stack.set_vexpand(True)
         self.main_stack.add_named(grid_ov, "grid")
+        # nagłówek widoku: nazwa zakładki (Biblioteka / Albumy / Wspólne) i podpis (album, liczba albumów)
+        head = Gtk.Box(spacing=12)
+        head.add_css_class("section-head")
+        self.sec_title = Gtk.Label(label=tr("Biblioteka"), xalign=0)
+        self.sec_title.add_css_class("section-title")
+        self.sec_sub = Gtk.Label(label="", xalign=0, ellipsize=3, hexpand=True)
+        self.sec_sub.add_css_class("section-sub")
+        self.sec_sub.set_valign(Gtk.Align.BASELINE)
+        self.sec_title.set_valign(Gtk.Align.BASELINE)
+        head.append(self.sec_title)
+        head.append(self.sec_sub)
+        self.sec_head = head
+        right.append(head)
         right.append(self.main_stack)
         right.append(self._build_selection_bar())
         self.split.set_end_child(right)
@@ -3334,6 +3367,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._busy = False
             self.wtitle.set_title(tr("Mapa"))
             self.wtitle.set_subtitle("")
+            self._set_section(tr("Biblioteka"), tr("Mapa"))
             self.show_map(row, limit=30000, title=tr("Wszystkie zdjęcia"))
             return
         self._map_prev = row
@@ -3356,6 +3390,7 @@ class MainWindow(Adw.ApplicationWindow):
         self._busy = False
         self.wtitle.set_title(row.title)
         self.cur_title = row.title
+        self._set_section(self._section_for_list(lb), row.title)
         self.load_album(row.album)
         for ms in (1500, 5000):  # tło przezroczystości: po załadowaniu pierwszych miniatur
             GLib.timeout_add(ms, self._update_backdrop)
