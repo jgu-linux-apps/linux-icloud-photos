@@ -88,6 +88,11 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+entry.album-search { border-radius: 999px; padding: 2px 12px; min-height: 34px;
+                     background-color: alpha(currentColor, 0.08); border: 1px solid alpha(currentColor, 0.14);
+                     box-shadow: none; transition: background-color 150ms, border-color 150ms; }
+entry.album-search:focus-within { background-color: alpha(currentColor, 0.12); border-color: alpha(@accent_bg_color, 0.8);
+                                  box-shadow: 0 0 0 3px alpha(@accent_bg_color, 0.25); }
 .section-head { padding: 14px 24px 2px 24px; }
 .section-title { font-size: 1.9em; font-weight: 800; letter-spacing: -0.01em; }
 .section-sub { font-size: 1.05em; opacity: 0.6; }
@@ -2553,6 +2558,12 @@ class MainWindow(Adw.ApplicationWindow):
         if hasattr(self, "sec_title"):
             self.sec_title.set_text(title)
             self.sec_sub.set_text(sub or "")
+            self.album_search.set_visible(self.main_stack.get_visible_child_name() == "albums")
+
+    def _on_album_search(self, entry):
+        text = entry.get_text()
+        if self.search.get_text() != text:
+            self.search.set_text(text)  # filtruje menu po lewej i kafelki (search-changed)
 
     def _section_for_list(self, lb):
         if lb is getattr(self, "list_user", None):
@@ -2789,6 +2800,14 @@ class MainWindow(Adw.ApplicationWindow):
         self.sec_title.set_valign(Gtk.Align.BASELINE)
         head.append(self.sec_title)
         head.append(self.sec_sub)
+        # wyszukiwarka albumów nad kafelkami (ta sama fraza co w menu po lewej)
+        self.album_search = Gtk.SearchEntry(placeholder_text=tr("Szukaj albumu"))
+        self.album_search.add_css_class("album-search")
+        self.album_search.set_width_chars(26)
+        self.album_search.set_valign(Gtk.Align.CENTER)
+        self.album_search.set_visible(False)
+        self.album_search.connect("search-changed", self._on_album_search)
+        head.append(self.album_search)
         self.sec_head = head
         right.append(head)
         right.append(self.main_stack)
@@ -2828,6 +2847,8 @@ class MainWindow(Adw.ApplicationWindow):
             self.exp_user.set_expanded(True)  # szukanie dotyczy głównie własnych albumów
         if getattr(self, "_album_flow", None) is not None:
             self._album_flow.invalidate_filter()
+        if hasattr(self, "album_search") and self.album_search.get_text() != entry.get_text():
+            self.album_search.set_text(entry.get_text())
 
     def _shared_loaded(self, gen, shared, err):
         if err or not shared or self._expired:
