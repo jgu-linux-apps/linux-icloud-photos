@@ -88,6 +88,8 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+button.albumrow { padding: 6px 12px; border-radius: 12px; }
+button.albumrow .albumcard-pic { border-radius: 10px; }
 entry.album-search { border-radius: 999px; padding: 2px 12px; min-height: 34px;
                      background-color: alpha(currentColor, 0.08); border: 1px solid alpha(currentColor, 0.14);
                      box-shadow: none; transition: background-color 150ms, border-color 150ms; }
@@ -2546,13 +2548,26 @@ class MainWindow(Adw.ApplicationWindow):
                 rows.append(row)
             row = row.get_next_sibling()
         size = max(140, min(260, self.tile_size if hasattr(self, "tile_size") else 180))
+        as_list = getattr(self, "album_view", "grid") == "list"
+        flow.set_max_children_per_line(1 if as_list else 12)
+        flow.set_min_children_per_line(1 if as_list else 2)
+        flow.set_row_spacing(4 if as_list else 14)
         for r in rows:
-            flow.append(self._album_card(r, size))
+            flow.append(self._album_list_row(r) if as_list else self._album_card(r, size))
         self.main_stack.set_visible_child_name("albums")
         self.wtitle.set_title(title)
         self.wtitle.set_subtitle(tr("{0} albumów").format(len(rows)) if rows else "")
         self._set_section(title, tr("{0} albumów").format(len(rows)) if rows else "")
         self.count.set_text("")
+
+    def _set_album_view(self, mode):
+        if mode == getattr(self, "album_view", None) and getattr(self, "_album_flow", None) is None:
+            return
+        self.album_view = mode
+        save_cfg(album_view=mode)
+        if getattr(self, "_album_flow", None) is not None and self.main_stack.get_visible_child_name() == "albums":
+            tab = self.side_stack.get_visible_child_name()
+            self._show_tab(tab if tab in ("albums", "shared") else "albums")
 
     def _album_card_filter(self, ch):
         q = (self.album_search.get_text().strip().lower() if hasattr(self, "album_search") else "")
@@ -2562,7 +2577,9 @@ class MainWindow(Adw.ApplicationWindow):
         if hasattr(self, "sec_title"):
             self.sec_title.set_text(title)
             self.sec_sub.set_text(sub or "")
-            self.album_search.set_visible(self.main_stack.get_visible_child_name() == "albums")
+            on = self.main_stack.get_visible_child_name() == "albums"
+            self.album_search.set_visible(on)
+            self.album_view_box.set_visible(on)
 
     def _on_album_search(self, _entry):
         # filtruje tylko kafelki; bez przepisywania tekstu do pola w menu (to cofało kursor podczas pisania)
@@ -2575,6 +2592,44 @@ class MainWindow(Adw.ApplicationWindow):
         if lb is getattr(self, "list_shared", None):
             return tr("Wspólne")
         return tr("Biblioteka")
+
+    def _album_list_row(self, row):
+        """Wiersz widoku listy albumów: mała okładka i nazwa."""
+        ch = Gtk.FlowBoxChild()
+        ch.album_row = row
+        btn = Gtk.Button()
+        btn.add_css_class("flat")
+        btn.add_css_class("albumrow")
+        box = Gtk.Box(spacing=14)
+        frame = Gtk.Overlay()
+        frame.add_css_class("albumcard-pic")
+        frame.set_overflow(Gtk.Overflow.HIDDEN)
+        pic = Gtk.Image()
+        pic.set_pixel_size(56)
+        pic.set_size_request(56, 56)
+        frame.set_child(pic)
+        ph = Gtk.Image.new_from_icon_name(row.icon.get_icon_name() or "folder-pictures-symbolic")
+        ph.set_pixel_size(24)
+        ph.add_css_class("dim-label")
+        frame.add_overlay(ph)
+
+        def set_tex(tex):
+            pic.set_from_paintable(tex)
+            ph.set_visible(tex is None)
+
+        set_tex(getattr(row, "cover_tex", None))
+        if not hasattr(row, "cover_cbs"):
+            row.cover_cbs = []
+        row.cover_cbs.append(set_tex)
+        box.append(frame)
+        lbl = Gtk.Label(label=row.title, xalign=0, ellipsize=3, hexpand=True)
+        lbl.add_css_class("heading")
+        box.append(lbl)
+        box.append(Gtk.Image.new_from_icon_name("go-next-symbolic"))
+        btn.set_child(box)
+        btn.connect("clicked", lambda *_: self._open_album_card(row))
+        ch.set_child(btn)
+        return ch
 
     def _open_album_card(self, row):
         lb = row.get_parent()
@@ -2815,6 +2870,23 @@ class MainWindow(Adw.ApplicationWindow):
         self.album_search.set_visible(False)
         self.album_search.connect("search-changed", self._on_album_search)
         head.append(self.album_search)
+        # widok albumów: kafelki albo lista (zapamiętany)
+        self.album_view_box = Gtk.Box(css_classes=["linked"], valign=Gtk.Align.CENTER)
+        self.album_view_btns = {}
+        first = None
+        for mode, icon, tip in (("grid", "view-grid-symbolic", tr("Kafelki")), ("list", "view-list-symbolic", tr("Lista"))):
+            b = Gtk.ToggleButton(icon_name=icon, tooltip_text=tip)
+            if first is None:
+                first = b
+            else:
+                b.set_group(first)
+            b.connect("toggled", lambda btn, m=mode: btn.get_active() and self._set_album_view(m))
+            self.album_view_box.append(b)
+            self.album_view_btns[mode] = b
+        self.album_view = load_cfg().get("album_view", "grid")
+        self.album_view_btns.get(self.album_view, first).set_active(True)
+        self.album_view_box.set_visible(False)
+        head.append(self.album_view_box)
         self.sec_head = head
         right.append(head)
         right.append(self.main_stack)

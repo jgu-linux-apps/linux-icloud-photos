@@ -77,6 +77,8 @@ UK = {
     "Cache size limit (GB)": "Ліміт розміру кешу (ГБ)",
     "Used now": "Зайнято зараз",
     "Clear cache": "Очистити кеш",
+    'Tiles': 'Плитки',
+    'List': 'Список',
     'Back to albums': 'Назад до альбомів',
     '{0} albums': '{0} альбомів',
     'Wikipedia - still searching OpenStreetMap…': 'Вікіпедія - ще шукаю в OpenStreetMap…',

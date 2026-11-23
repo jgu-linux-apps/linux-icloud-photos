@@ -198,6 +198,8 @@ EN = {
     "Limit pamięci podręcznej (GB)": "Cache size limit (GB)",
     "Zajęte teraz": "Used now",
     "Wyczyść pamięć podręczną": "Clear cache",
+    'Kafelki': 'Tiles',
+    'Lista': 'List',
     'Wróć do albumów': 'Back to albums',
     '{0} albumów': '{0} albums',
     'Wikipedia - szukam jeszcze w OpenStreetMap…': 'Wikipedia - still searching OpenStreetMap…',
