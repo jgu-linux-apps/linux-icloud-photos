@@ -2145,7 +2145,7 @@ class AlbumRow(Gtk.ListBoxRow):
             self.thumb.set_from_paintable(tex)
             self.icon.set_visible(False)
         for cb in getattr(self, "cover_cbs", []):
-            cb(tex)
+            cb(self.cover_tex)  # kafelki dostają dużą (ostrą) okładkę, nie małą z menu
 
 
 class MainWindow(Adw.ApplicationWindow):
