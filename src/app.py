@@ -2533,7 +2533,7 @@ class MainWindow(Adw.ApplicationWindow):
                                            min_children_per_line=2, max_children_per_line=12)
             for m in ("top", "bottom", "start", "end"):
                 getattr(self._album_flow, f"set_margin_{m}")(18)
-            self._album_flow.set_filter_func(lambda ch: self._row_filter(ch.album_row))
+            self._album_flow.set_filter_func(self._album_card_filter)
             sw = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
             sw.set_child(self._album_flow)
             self.main_stack.add_named(sw, "albums")
@@ -2554,16 +2554,20 @@ class MainWindow(Adw.ApplicationWindow):
         self._set_section(title, tr("{0} albumów").format(len(rows)) if rows else "")
         self.count.set_text("")
 
+    def _album_card_filter(self, ch):
+        q = (self.album_search.get_text().strip().lower() if hasattr(self, "album_search") else "")
+        return self._row_filter(ch.album_row) and (not q or q in ch.album_row.title.lower())
+
     def _set_section(self, title, sub=""):
         if hasattr(self, "sec_title"):
             self.sec_title.set_text(title)
             self.sec_sub.set_text(sub or "")
             self.album_search.set_visible(self.main_stack.get_visible_child_name() == "albums")
 
-    def _on_album_search(self, entry):
-        text = entry.get_text()
-        if self.search.get_text() != text:
-            self.search.set_text(text)  # filtruje menu po lewej i kafelki (search-changed)
+    def _on_album_search(self, _entry):
+        # filtruje tylko kafelki; bez przepisywania tekstu do pola w menu (to cofało kursor podczas pisania)
+        if getattr(self, "_album_flow", None) is not None:
+            self._album_flow.invalidate_filter()
 
     def _section_for_list(self, lb):
         if lb is getattr(self, "list_user", None):
@@ -2850,8 +2854,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.exp_user.set_expanded(True)  # szukanie dotyczy głównie własnych albumów
         if getattr(self, "_album_flow", None) is not None:
             self._album_flow.invalidate_filter()
-        if hasattr(self, "album_search") and self.album_search.get_text() != entry.get_text():
-            self.album_search.set_text(entry.get_text())
+
 
     def _shared_loaded(self, gen, shared, err):
         if err or not shared or self._expired:
