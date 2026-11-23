@@ -2601,7 +2601,10 @@ class MainWindow(Adw.ApplicationWindow):
         frame = Gtk.Overlay()
         frame.add_css_class("albumcard-pic")
         frame.set_overflow(Gtk.Overflow.HIDDEN)
-        pic = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True)
+        # Gtk.Image o stałym rozmiarze: duża okładka jest rysowana w wymiarze kafelka (ostro),
+        # ale nie rozpycha kafelka do swojej pełnej rozdzielczości jak Gtk.Picture
+        pic = Gtk.Image()
+        pic.set_pixel_size(size)
         pic.set_size_request(size, size)
         frame.set_child(pic)
         ph = Gtk.Image.new_from_icon_name(row.icon.get_icon_name() or "folder-pictures-symbolic")
@@ -2610,7 +2613,7 @@ class MainWindow(Adw.ApplicationWindow):
         frame.add_overlay(ph)
 
         def set_tex(tex):
-            pic.set_paintable(tex)
+            pic.set_from_paintable(tex)
             ph.set_visible(tex is None)
 
         set_tex(getattr(row, "cover_tex", None))
