@@ -198,6 +198,7 @@ EN = {
     "Limit pamięci podręcznej (GB)": "Cache size limit (GB)",
     "Zajęte teraz": "Used now",
     "Wyczyść pamięć podręczną": "Clear cache",
+    '{0} albumów': '{0} albums',
     'Wikipedia - szukam jeszcze w OpenStreetMap…': 'Wikipedia - still searching OpenStreetMap…',
     'Tylko Wikipedia - OpenStreetMap chwilowo nie odpowiada': 'Wikipedia only - OpenStreetMap is not responding right now',
     'Źródła: Wikipedia i OpenStreetMap, w pobliżu środka mapy': 'Sources: Wikipedia and OpenStreetMap, near the map centre',

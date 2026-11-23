@@ -1,6 +1,6 @@
 # Linux iCloud Photos
 
-**Current version: 1.0.3 (2026-11-22)**
+**Current version: 1.0.4 (2026-11-23)**
 
 Created by: JGu  
 Supported by Claude
@@ -37,7 +37,7 @@ It relies on the unofficial `pyicloud` library, so Apple may break it at any tim
 - Adding to an album first checks which photos are already in it, skips them and tells you the album name
 - Only the photos that are not in the album yet are added, with a summary of how many were skipped
 - Settings window: cache size limit (GB), "Clear cache" button, video player (automatic / mpv / built-in), language, theme (Aurora - the default - or System), window transparency, and "Log out"
-- Left menu with three tabs: "Library" (All Photos, Favourites, Videos, Live Photos, Screenshots, Map and the other media types, Hidden, Recently Deleted), "Albums" ("New album…" and your albums) and "Shared" (shown only when you have shared albums). The chosen tab is remembered; the album search box at the top searches the albums. The menu is always wide enough for all three tabs
+- Left menu with three tabs: "Library" (All Photos, Favourites, Videos, Live Photos, Screenshots, Map and the other media types, Hidden, Recently Deleted), "Albums" ("New album…" and your albums) and "Shared" (shown only when you have shared albums). Choosing Albums or Shared shows the albums on the right as large cover tiles; an album's photos load when you click it. The chosen tab is remembered; the album search box at the top filters the albums. The menu is always wide enough for all three tabs
 - Album cover thumbnails (same size for all, cached on disk); star icon for Favorites, camera icon for Videos
 - Section titles and "All Photos" are bold; app version and date are shown at the bottom of the menu
 - Resizable divider between the menu and the photo grid (the width is remembered), menu can be hidden
@@ -185,6 +185,7 @@ All commands below are run inside `src/`.
 
 ## Version history
 
+- 1.0.4: The Albums and Shared tabs show the albums on the right as large cover tiles (like the photo grid, filtered by the album search); the photos load only after you click an album. The README on the GitHub page is up to date again (it had stayed at 0.17.5), and a test now keeps both README files identical.
 - 1.0.3: Map: "What is worth seeing nearby?" also uses OpenStreetMap (observation towers, viewpoints, ruins, castles, museums…), which knows far more in small towns than Wikipedia; Wikipedia results show at once and the list is re-ranked when OpenStreetMap answers. Villages, districts, railways and duplicates are filtered out, and an unnamed tower is labelled with the nearest peak. The places are shown on the map as numbered orange pins (readable in light and dark themes) and each card shows the address (OpenStreetMap). Aurora is the default theme (a theme chosen earlier in Settings is kept). The System theme also shows a frame in the accent colour around the photo under the mouse, and both themes now frame photos in the Rows layout too.
 - 1.0.2: Share: the share button in the selection bar and "Share…" in the right-click menu prepare the photos as files ready to send (HEIC converted to JPEG, videos as H.264) and offer WhazzApp (copies them to the clipboard and opens WhazzApp, paste with Ctrl+V in the chat), e-mail with attachments, another app (for one file), copy to clipboard and show in folder.
 - 1.0.1: Map: "What is worth seeing nearby?" button when zoomed in (zoom 11+) opens a side panel on the right with up to 5 places within 10 km of the map centre, each with a photo, a short description and the distance (from Wikipedia in the app language; clicking a place opens its article in the browser). Numbers on photo groups are readable in the dark theme. Nicer right-click menus (icons, rounded, slightly translucent, delete actions in red) in light and dark themes; the glow of the top row of photos is no longer cut off. Photos and videos open in the main window, in place of the grid (like the map), with a "Back" button and Esc to return; videos play in the built-in player there (M still opens mpv). Fixed the error message when the map could not be prepared.

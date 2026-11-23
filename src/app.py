@@ -88,6 +88,8 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+button.albumcard { padding: 6px; border-radius: 14px; }
+.albumcard-pic { border-radius: 12px; background-color: alpha(currentColor, 0.08); }
 button.share-opt { padding: 8px 10px; border-radius: 10px; }
 .share-sub { font-size: 0.85em; }
 popover.ctx > contents { border-radius: 14px; padding: 6px; min-width: 230px;
@@ -2129,9 +2131,12 @@ class AlbumRow(Gtk.ListBoxRow):
         self.set_child(box)
 
     def set_cover(self, tex):
+        self.cover_tex = tex
         if self.thumb is not None:
             self.thumb.set_from_paintable(tex)
             self.icon.set_visible(False)
+        for cb in getattr(self, "cover_cbs", []):
+            cb(tex)
 
 
 class MainWindow(Adw.ApplicationWindow):
@@ -2494,6 +2499,93 @@ class MainWindow(Adw.ApplicationWindow):
         self.side_stack.set_visible_child_name(key)
         if key != "shared":
             save_cfg(side_tab=key)
+        if not hasattr(self, "main_stack") or self.stack.get_visible_child_name() != "main":
+            return
+        if key in ("albums", "shared"):
+            self._show_album_grid(self.list_user if key == "albums" else self.list_shared,
+                                  tr("Albumy") if key == "albums" else tr("Wspólne"))
+        elif self.main_stack.get_visible_child_name() == "albums":
+            row = self.list_primary.get_selected_row() or self.list_primary.get_row_at_index(0)
+            self.main_stack.set_visible_child_name("grid")
+            if row is not None and self.cur_album is None:
+                row.get_parent().select_row(row)
+            elif self.cur_title:
+                self.wtitle.set_title(self.cur_title)
+
+    # --- zakładki Albumy / Wspólne: kafelki albumów po prawej, zdjęcia dopiero po kliknięciu albumu ---
+    def _show_album_grid(self, lb, title):
+        if getattr(self, "_album_flow", None) is None:
+            self._album_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE, homogeneous=True,
+                                           column_spacing=14, row_spacing=14, valign=Gtk.Align.START,
+                                           min_children_per_line=2, max_children_per_line=12)
+            for m in ("top", "bottom", "start", "end"):
+                getattr(self._album_flow, f"set_margin_{m}")(18)
+            self._album_flow.set_filter_func(lambda ch: self._row_filter(ch.album_row))
+            sw = Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER)
+            sw.set_child(self._album_flow)
+            self.main_stack.add_named(sw, "albums")
+        flow = self._album_flow
+        while (c := flow.get_first_child()) is not None:
+            flow.remove(c)
+        rows, row = [], lb.get_first_child()
+        while row is not None:
+            if isinstance(row, AlbumRow) and row.album is not None:
+                rows.append(row)
+            row = row.get_next_sibling()
+        size = max(140, min(260, self.tile_size if hasattr(self, "tile_size") else 180))
+        for r in rows:
+            flow.append(self._album_card(r, size))
+        self.main_stack.set_visible_child_name("albums")
+        self.wtitle.set_title(title)
+        self.wtitle.set_subtitle(tr("{0} albumów").format(len(rows)) if rows else "")
+        self.count.set_text("")
+
+    def _open_album_card(self, row):
+        lb = row.get_parent()
+        if lb is None:
+            return
+        if lb.get_selected_row() is row and self.cur_album is row.album:
+            self.main_stack.set_visible_child_name("grid")  # ten sam album: tylko wróć do jego zdjęć
+            self.wtitle.set_title(row.title)
+            self._update_count()
+        else:
+            lb.select_row(row)
+
+    def _album_card(self, row, size):
+        ch = Gtk.FlowBoxChild()
+        ch.album_row = row
+        btn = Gtk.Button()
+        btn.add_css_class("flat")
+        btn.add_css_class("albumcard")
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        frame = Gtk.Overlay()
+        frame.add_css_class("albumcard-pic")
+        frame.set_overflow(Gtk.Overflow.HIDDEN)
+        pic = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, can_shrink=True)
+        pic.set_size_request(size, size)
+        frame.set_child(pic)
+        ph = Gtk.Image.new_from_icon_name(row.icon.get_icon_name() or "folder-pictures-symbolic")
+        ph.set_pixel_size(size // 3)
+        ph.add_css_class("dim-label")
+        frame.add_overlay(ph)
+
+        def set_tex(tex):
+            pic.set_paintable(tex)
+            ph.set_visible(tex is None)
+
+        set_tex(getattr(row, "cover_tex", None))
+        if not hasattr(row, "cover_cbs"):
+            row.cover_cbs = []
+        row.cover_cbs.append(set_tex)
+        box.append(frame)
+        lbl = Gtk.Label(label=row.title, xalign=0, ellipsize=3, max_width_chars=1)
+        lbl.set_hexpand(True)
+        box.append(lbl)
+        btn.set_child(box)
+        btn.set_tooltip_text(row.title)
+        btn.connect("clicked", lambda *_: self._open_album_card(row))
+        ch.set_child(btn)
+        return ch
 
     def _make_list(self):
         lb = Gtk.ListBox()
@@ -2554,6 +2646,9 @@ class MainWindow(Adw.ApplicationWindow):
             else:
                 b.set_group(first)
             b.connect("toggled", lambda btn, k=key: btn.get_active() and self._show_tab(k))
+            # klik w już aktywną zakładkę (np. zapamiętaną przy starcie) też pokazuje jej widok
+            b.connect("clicked", lambda btn, k=key: btn.get_active() and k != "lib"
+                      and self.side_stack.get_visible_child_name() == k and self._show_tab(k))
             tabs.append(b)
             self.tab_btns[key] = b
         side.append(tabs)
@@ -2675,6 +2770,8 @@ class MainWindow(Adw.ApplicationWindow):
             lb.invalidate_filter()
         if entry.get_text().strip():
             self.exp_user.set_expanded(True)  # szukanie dotyczy głównie własnych albumów
+        if getattr(self, "_album_flow", None) is not None:
+            self._album_flow.invalidate_filter()
 
     def _shared_loaded(self, gen, shared, err):
         if err or not shared or self._expired:
@@ -3108,6 +3205,9 @@ class MainWindow(Adw.ApplicationWindow):
         if first:
             first.get_parent().select_row(first)
         self._albums_ready = True
+        tab = self.side_stack.get_visible_child_name() if hasattr(self, "side_stack") else "lib"
+        if tab in ("albums", "shared") and not self._pending_open:
+            GLib.idle_add(lambda: (self._show_tab(tab), False)[1])  # zapamiętana zakładka Albumy: kafelki
         if self._pending_open:
             GLib.idle_add(self._apply_open)
         GLib.timeout_add_seconds(2, lambda: (self._load_covers(cover_rows), False)[1])

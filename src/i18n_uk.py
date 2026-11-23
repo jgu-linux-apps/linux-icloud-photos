@@ -77,6 +77,7 @@ UK = {
     "Cache size limit (GB)": "Ліміт розміру кешу (ГБ)",
     "Used now": "Зайнято зараз",
     "Clear cache": "Очистити кеш",
+    '{0} albums': '{0} альбомів',
     'Wikipedia - still searching OpenStreetMap…': 'Вікіпедія - ще шукаю в OpenStreetMap…',
     'Wikipedia only - OpenStreetMap is not responding right now': 'Лише Вікіпедія - OpenStreetMap зараз не відповідає',
     'Sources: Wikipedia and OpenStreetMap, near the map centre': 'Джерела: Вікіпедія та OpenStreetMap, поблизу центру карти',
