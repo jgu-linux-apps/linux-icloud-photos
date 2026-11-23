@@ -175,7 +175,7 @@ class T(Adw.Application):
         w.main_stack.set_visible_child_name("grid")
         later(2000, self.e3)  # siatka musi się znów ułożyć po zamknięciu podglądu
     def e3(self):
-        w=self.win; rec=self._rec; T_=self.tiles()
+        w=self.win; T_=self.tiles(); rec=T_[2] if len(T_)>2 else self._rec  # pozycje po ponownym ułożeniu siatki
         # zaznaczanie w rzędach: klik i ramka
         w.select_btn.set_active(True); c=self.centre(rec); g=G(); w._rb_begin(g,*c); w._rb_end(g,0,0)
         step("E3_click_selects_in_rows", lambda: len(w.selected))
