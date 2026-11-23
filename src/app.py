@@ -245,7 +245,8 @@ def make_square_texture(data: bytes, size: int = 96) -> Gdk.Texture:
         w, h = pb.get_width(), pb.get_height()
         side = min(w, h)
         pb = pb.new_subpixbuf((w - side) // 2, (h - side) // 2, side, side)
-        pb = pb.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        if size > 0:  # size <= 0: pełna rozdzielczość wycinka (ostre kafelki albumów)
+            pb = pb.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
         return Gdk.Texture.new_for_pixbuf(pb)
     except Exception:  # noqa: BLE001
         return make_texture(data)
@@ -2130,8 +2131,8 @@ class AlbumRow(Gtk.ListBoxRow):
         box.append(lbl)
         self.set_child(box)
 
-    def set_cover(self, tex):
-        self.cover_tex = tex
+    def set_cover(self, tex, big=None):
+        self.cover_tex = big or tex
         if self.thumb is not None:
             self.thumb.set_from_paintable(tex)
             self.icon.set_visible(False)
@@ -2549,7 +2550,15 @@ class MainWindow(Adw.ApplicationWindow):
             self.wtitle.set_title(row.title)
             self._update_count()
         else:
+            self._card_open = True
             lb.select_row(row)
+            self._card_open = False
+        self.albums_back.set_visible(True)
+
+    def _back_to_albums(self):
+        self.albums_back.set_visible(False)
+        tab = self.side_stack.get_visible_child_name()
+        self._show_tab(tab if tab in ("albums", "shared") else "albums")
 
     def _album_card(self, row, size):
         ch = Gtk.FlowBoxChild()
@@ -2732,6 +2741,20 @@ class MainWindow(Adw.ApplicationWindow):
         self.map_back.set_visible(False)
         self.map_back.connect("clicked", lambda *_: self._back_to_map())
         grid_ov.add_overlay(self.map_back)
+        self.albums_back = Gtk.Button()
+        ab = Gtk.Box(spacing=6)
+        ab.append(Gtk.Image.new_from_icon_name("go-previous-symbolic"))
+        ab.append(Gtk.Label(label=tr("Wróć do albumów")))
+        self.albums_back.set_child(ab)
+        self.albums_back.add_css_class("osd")
+        self.albums_back.add_css_class("pill")
+        self.albums_back.set_halign(Gtk.Align.START)
+        self.albums_back.set_valign(Gtk.Align.START)
+        self.albums_back.set_margin_start(12)
+        self.albums_back.set_margin_top(12)
+        self.albums_back.set_visible(False)
+        self.albums_back.connect("clicked", lambda *_: self._back_to_albums())
+        grid_ov.add_overlay(self.albums_back)
         self.main_stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, transition_duration=150)
         self.main_stack.set_vexpand(True)
         self.main_stack.add_named(grid_ov, "grid")
@@ -3270,7 +3293,9 @@ class MainWindow(Adw.ApplicationWindow):
             last = None
             for k in range(3):  # chwilowe błędy / limity Apple - ponów z odstępem
                 try:
-                    return make_square_texture(self.icloud.album_cover(row.key, row.album))
+                    data = self.icloud.album_cover(row.key, row.album)
+                    # mała okładka do menu, duża (ostra) do kafelków w zakładce Albumy
+                    return make_square_texture(data), make_square_texture(data, 0)
                 except LookupError:
                     raise
                 except Exception as e:  # noqa: BLE001
@@ -3287,7 +3312,8 @@ class MainWindow(Adw.ApplicationWindow):
                 if f.exception():
                     log.warning("okładka albumu %r: %r", row.title, f.exception())
                     return
-                GLib.idle_add(lambda: (row.set_cover(f.result()), False)[1])
+                small, big = f.result()
+                GLib.idle_add(lambda: (row.set_cover(small, big), False)[1])
 
             fut.add_done_callback(done)
 
@@ -3311,6 +3337,8 @@ class MainWindow(Adw.ApplicationWindow):
             self.show_map(row, limit=30000, title=tr("Wszystkie zdjęcia"))
             return
         self._map_prev = row
+        if hasattr(self, "albums_back") and not getattr(self, "_card_open", False):
+            self.albums_back.set_visible(False)  # album wybrany z menu, nie z kafelków
         if hasattr(self, "map_back") and self.map_back.get_visible():
             self.map_back.set_visible(False)
             self.main_stack.set_visible_child_name("map")  # niżej: schowaj mapę i zatrzymaj jej wczytywanie

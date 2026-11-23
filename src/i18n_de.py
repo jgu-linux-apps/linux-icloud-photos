@@ -77,6 +77,7 @@ DE = {
     "Cache size limit (GB)": "Cache-Größenlimit (GB)",
     "Used now": "Aktuell belegt",
     "Clear cache": "Cache leeren",
+    'Back to albums': 'Zurück zu den Alben',
     '{0} albums': '{0} Alben',
     'Wikipedia - still searching OpenStreetMap…': 'Wikipedia - suche noch in OpenStreetMap…',
     'Wikipedia only - OpenStreetMap is not responding right now': 'Nur Wikipedia - OpenStreetMap antwortet gerade nicht',
