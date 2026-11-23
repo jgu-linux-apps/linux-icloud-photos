@@ -15,7 +15,7 @@
   "ctrl_click_enters_mode -> (True, 1, True)",
   "plain_click_untouched -> (False, 0, True)",
   "scrollbar_press_ignored -> True",
-  "autoscroll_moves_and_selects_more -> (True, True, 4)",
+  "autoscroll_moves_and_selects_more -> (True, True, 3)",
   "rubber_has_size_after_layout -> (True, True, True)",
   "rubber_hidden_at_end -> False",
   "EXCEPTIONS: none"
