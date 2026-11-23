@@ -228,32 +228,39 @@ function render(c, items, note) {{
       : `<div class="noimg">\\u{{1F3DE}}</div>`;
     a.innerHTML = pic + `<b><span class="n">${{n}}</span>${{esc(p.title)}}</b>`
       + `<div class="adr adr-${{k}}">&hellip;</div><p>${{esc(p.text)}}</p><div class="d">${{d.toFixed(1)}} km`
-      + ` &middot; ${{p.src === 'wiki' ? 'Wikipedia' : 'OpenStreetMap'}}</div>`;
+      + ` &middot; ${{{{wiki: 'Wikipedia', wikidata: 'Wikidata'}}[p.src] || 'OpenStreetMap'}}</div>`;
     a.addEventListener('mouseenter', () => m.openPopup());
     cards.appendChild(a);
   }});
   map.fitBounds(L.latLngBounds(bounds.concat([[c.lat, c.lng]])).pad(0.25), {{maxZoom: 16, paddingBottomRight: [360, 0]}});
   addresses(items);
 }}
+async function appPlaces(kind, c) {{
+  // wd = Wikidata, nom = Nominatim; the app fetches them (its own name, rate limits, no browser restrictions)
+  const r = await fetch(`${{kind}}?lat=${{c.lat}}&lon=${{c.lng}}&lang={lang}`);
+  if (!r.ok) throw new Error(kind + ' ' + r.status);
+  return (await r.json()).map(x => ({{...x, text: x.text || LAB.types[x.kind] || ''}}));
+}}
 async function nearby() {{
   panel.classList.add('open'); nbVis();
   const run = ++nbRun, c = map.getCenter();
   document.getElementById('cards').innerHTML = ''; poiLayer.clearLayers();
   document.getElementById('pst').textContent = LAB.nb_loading;
-  const osmP = osmPlaces(c, 5000);
-  let wiki = [];
-  try {{ wiki = await wikiPlaces(c); }} catch (e) {{ }}
-  if (run !== nbRun) return;
-  render(c, rank(c, wiki, []), LAB.nb_more);  // Wikipedia at once, OpenStreetMap follows
-  let osm = null;
-  try {{ osm = await osmP; }} catch (e) {{ }}
-  if (run !== nbRun) return;
-  if (osm === null) {{
-    if (!wiki.length) document.getElementById('pst').textContent = LAB.nb_error;
-    else document.getElementById('pst').textContent = LAB.nb_osm_down;
-    return;
-  }}
-  render(c, rank(c, wiki, osm));
+  const got = {{wiki: null, wd: null, nom: null, osm: null}}, failed = new Set();
+  let shown = '';
+  const update = () => {{
+    if (run !== nbRun) return;
+    const others = [].concat(got.wd || [], got.nom || [], got.osm || []);
+    const pending = Object.keys(got).filter(k => got[k] === null && !failed.has(k)).length;
+    const items = rank(c, got.wiki || [], others);
+    const note = pending ? LAB.nb_more : (failed.size === 4 ? LAB.nb_error : LAB.nb_source);
+    const key = items.map(x => x.title).join('|') + note;
+    if (key === shown) return;  // nothing new: do not redraw (no flicker, addresses keep loading)
+    shown = key;
+    render(c, items, note);
+  }};
+  const go = (k, p) => p.then(v => {{ got[k] = v; }}, () => {{ failed.add(k); }}).then(update);
+  go('wiki', wikiPlaces(c)); go('wd', appPlaces('wd', c)); go('nom', appPlaces('nom', c)); go('osm', osmPlaces(c, 5000));
 }}
 nb.onclick = nearby;
 const poiLayer = L.layerGroup().addTo(map);
@@ -310,6 +317,118 @@ def overpass(query: str) -> bytes:
     raise last or RuntimeError("overpass")
 
 
+WD_GOOD_RE = ("wieża widokowa", "observation tower", "aussichtsturm", "оглядова вежа", "góra", "szczyt", "wzgórze",
+           "mountain", "hill", "summit", "berg", "гора", "zamek", "castle", "burg", "schloss", "замок", "pałac",
+           "palace", "палац", "muzeum", "museum", "музей", "kościół", "church", "kirche", "церква", "ruiny",
+           "ruin", "руїни", "pomnik", "monument", "denkmal", "пам", "park", "rezerwat", "reserve", "jezioro",
+           "lake", "see", "озеро", "wodospad", "waterfall", "latarnia", "lighthouse", "plaża", "beach", "zabyt",
+           "grodzisko", "hillfort", "fort", "twierdza", "fortress", "amfiteatr", "punkt widokowy", "viewpoint",
+           "ogród", "garden", "zoo", "akwarium", "aquarium", "katedr", "cathedral", "bazylik", "basilica",
+           "klasztor", "monastery", "kaplica", "chapel", "dwór", "manor", "młyn", "mill", "skansen", "open-air")
+WD_TOP_RE = ("wieża widokowa", "observation tower", "aussichtsturm", "góra", "szczyt", "wzgórze", "mountain", "hill",
+          "summit", "punkt widokowy", "viewpoint", "zamek", "castle", "burg", "ruiny", "ruin", "rezerwat", "reserve",
+          "latarnia", "lighthouse", "plaża", "beach", "wodospad", "waterfall", "grodzisko", "skansen")
+WD_BAD_RE = ("stacja", "station", "przystanek", "stop", "wieś", "village", "część", "dzielnica", "district",
+          "osiedle", "gmina", "municipality", "ulica", "street", "szkoła", "school", "miasto", "city", "town",
+          "powiat", "county", "osada", "hamlet", "parafia", "parish", "przedsiębiorstw", "company", "zajezdnia",
+          "depot", "cmentarz", "cemetery", "linia kolejowa", "railway")
+
+
+def _get_json(url: str, timeout: int = 20):
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def wikidata_places(lat: float, lon: float, lang: str = "en", radius_km: float = 6) -> list:
+    """Obiekty z Wikidata w promieniu (z typem, opisem i zdjęciem). Wieże, szczyty, zamki itp. są też
+    w małych miejscowościach, gdzie Wikipedia ma mało artykułów."""
+    import urllib.parse
+
+    q = f"""SELECT ?item ?itemLabel ?itemDescription ?typeLabel ?img ?loc ?article WHERE {{
+  SERVICE wikibase:around {{ ?item wdt:P625 ?loc . bd:serviceParam wikibase:center "Point({lon} {lat})"^^geo:wktLiteral .
+    bd:serviceParam wikibase:radius "{radius_km}" . }}
+  OPTIONAL {{ ?item wdt:P31 ?type . }}
+  OPTIONAL {{ ?item wdt:P18 ?img . }}
+  OPTIONAL {{ ?article schema:about ?item ; schema:isPartOf <https://{lang}.wikipedia.org/> . }}
+  SERVICE wikibase:label {{ bd:serviceParam wikibase:language "{lang},en,pl". }}
+}} LIMIT 300"""
+    data = _get_json("https://query.wikidata.org/sparql?format=json&query=" + urllib.parse.quote(q), timeout=25)
+    items = {}
+    for b in data.get("results", {}).get("bindings", []):
+        qid = b["item"]["value"].rsplit("/", 1)[-1]
+        it = items.setdefault(qid, {"qid": qid, "title": b.get("itemLabel", {}).get("value", ""),
+                                    "text": b.get("itemDescription", {}).get("value", ""), "types": set(),
+                                    "img": "", "url": b.get("article", {}).get("value") or f"https://www.wikidata.org/wiki/{qid}"})
+        if "typeLabel" in b:
+            it["types"].add(b["typeLabel"]["value"].lower())
+        if "img" in b and not it["img"]:
+            it["img"] = b["img"]["value"].replace("http://", "https://") + "?width=400"
+        if "loc" in b and "lat" not in it:
+            pt = b["loc"]["value"].replace("Point(", "").rstrip(")").split()
+            it["lon"], it["lat"] = float(pt[0]), float(pt[1])
+    out = []
+    for it in items.values():
+        if "lat" not in it or not it["title"] or it["title"] == it["qid"]:
+            continue
+        kinds = " ".join(it["types"]) + " " + it["text"].lower() + " " + it["title"].lower()
+        score = ((5 if any(g in kinds for g in WD_GOOD_RE) else 0) + (2 if any(g in kinds for g in WD_TOP_RE) else 0)
+                 + (1 if it["img"] else 0))
+        if any(x in " ".join(it["types"]) for x in WD_BAD_RE):
+            score -= 8
+        if score <= 0:
+            continue
+        typ = sorted(it["types"])[0] if it["types"] else ""
+        out.append({"title": it["title"], "lat": it["lat"], "lon": it["lon"], "img": it["img"],
+                    "text": (it["text"] or typ)[:220], "url": it["url"], "score": score, "src": "wikidata",
+                    "wiki": urllib.parse.unquote(it["url"].rsplit("/", 1)[-1]).replace("_", " ")
+                    if "wikipedia.org" in it["url"] else ""})
+    return out
+
+
+NOM_QUERIES = ("viewpoint", "attraction", "museum", "ruins", "castle", "observation tower")
+
+
+def nominatim_places(lat: float, lon: float, lang: str = "en", radius_km: float = 5) -> list:
+    """Wyszukiwarka OpenStreetMap (Nominatim): punkty widokowe, atrakcje, muzea, ruiny, zamki w okolicy.
+    Kolejne zapytania co 1,1 s (zasady usługi: najwyżej 1 na sekundę)."""
+    import math
+    import time
+    import urllib.parse
+
+    dlat = radius_km / 111.0
+    dlon = radius_km / (111.0 * max(0.2, math.cos(math.radians(lat))))
+    box = f"{lon - dlon},{lat + dlat},{lon + dlon},{lat - dlat}"
+    out, seen = [], set()
+    for k, q in enumerate(NOM_QUERIES):
+        if k:
+            time.sleep(1.1)
+        try:
+            rows = _get_json("https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
+                {"q": q, "format": "jsonv2", "viewbox": box, "bounded": 1, "limit": 8, "accept-language": lang,
+                 "extratags": 1}), timeout=12)
+        except Exception:  # noqa: BLE001
+            continue
+        for r in rows:
+            key = (r.get("osm_type"), r.get("osm_id"))
+            if key in seen or not r.get("name"):
+                continue
+            seen.add(key)
+            kind = r.get("type") or r.get("category") or ""
+            ex = r.get("extratags") or {}
+            img = ""
+            if (ex.get("wikimedia_commons") or "").startswith("File:"):
+                img = "https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(ex["wikimedia_commons"][5:]) + "?width=400"
+            out.append({"title": r["name"], "lat": float(r["lat"]), "lon": float(r["lon"]), "img": img,
+                        "kind": kind, "text": "", "url": f"https://www.openstreetmap.org/{r.get('osm_type')}/{r.get('osm_id')}",
+                        "score": {"viewpoint": 7, "tower": 8, "attraction": 6, "museum": 6, "castle": 6,
+                                  "ruins": 5}.get(kind, 3) + (1 if img else 0), "src": "osm",
+                        "wiki": (ex.get("wikipedia") or "").split(":", 1)[-1]})
+    return out
+
+
 class MapSession:
     """Punkty mapy zbierane w tle + serwer HTTP, z którego czyta je strona."""
 
@@ -333,6 +452,14 @@ class MapSession:
                 self.end_headers()
                 self.wfile.write(body)
 
+            def _json_endpoint(self, fn, q):
+                try:
+                    lat, lon = float(q["lat"][0]), float(q["lon"][0])
+                    lang = (q.get("lang") or ["en"])[0][:5]
+                    return self._send(200, "application/json", json.dumps(fn(lat, lon, lang)).encode())
+                except Exception as e:  # noqa: BLE001
+                    return self._send(502, "text/plain", str(e).encode())
+
             def do_POST(self):
                 parts = urlparse(self.path).path.strip("/").split("/")
                 if len(parts) != 2 or parts[0] != outer.token or parts[1] != "osm":
@@ -354,6 +481,9 @@ class MapSession:
                         dark = parse_qs(u.query).get("dark", ["0"])[0] == "1"
                         page = build(outer.title, outer.labels, dark=dark)
                         return self._send(200, "text/html; charset=utf-8", page.encode())
+                    if parts[1] in ("wd", "nom"):
+                        return self._json_endpoint(wikidata_places if parts[1] == "wd" else nominatim_places,
+                                                   parse_qs(u.query))
                     if parts[1] == "points":
                         start = int(parse_qs(u.query).get("from", ["0"])[0])
                         with outer.lock:

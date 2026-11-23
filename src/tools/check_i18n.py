@@ -39,6 +39,8 @@ for f in files:
         if any(isinstance(a, ast.JoinedStr) for a in anc(n)) and not isinstance(n, ast.JoinedStr): continue
         if s in ('zdjęcie','zdjęcia','zdjęć','paź'): continue
         par = parents.get(id(n))
+        if isinstance(par, ast.Tuple):  # krotka słów kluczowych przypisana do stałej *_RE
+            par = parents.get(id(par))
         if isinstance(par, ast.Assign) and all(isinstance(x, ast.Name) and x.id.endswith('_RE') for x in par.targets):
             continue  # stałe *_RE to wyrażenia regularne (np. słowa kluczowe miejsc), nie tekst interfejsu
         if PLCH.search(s) and not re.search(r"\[a-z", s):      # pomiń wyrażenia regularne

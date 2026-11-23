@@ -25,7 +25,9 @@
   "gps_from_metadata -> [(54.48, 18.56), (-33.9, -151.2), None]",
   "map_dedupe -> (True, False, 1, True)",
   "geo_fast_all_ranges -> (334, 334, [0, 3, 6, 9])",
-  "geo_fast_stop -> 0"
+  "geo_fast_stop -> 0",
+  "wikidata_places -> [('Góra Markowca', 8, 'wikidata', True), ('Ruiny kościoła', 8, 'wikidata', True)]",
+  "nominatim_places -> [('Szmelta Grand View', 7, 'viewpoint')]"
  ],
  "runs": 2,
  "dropped_unstable": 0

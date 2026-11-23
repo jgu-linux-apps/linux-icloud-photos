@@ -118,3 +118,22 @@ got = list(ic.iter_geo_fast(PagedAlbum(1000), workers=7, page=60))
 step("geo_fast_all_ranges", lambda: (len(got), len({a.id for a, *_ in got}), sorted(int(a.id[2:]) for a, *_ in got)[:4]))
 step("geo_fast_stop", lambda: len(list(ic.iter_geo_fast(PagedAlbum(1000), workers=4, should_stop=lambda: True))))
 ms.close()
+# 1.0.5: Wikidata i Nominatim jako źródła „Co warto zwiedzić” (odpowiedzi podstawione, bez sieci)
+import map_page as _mp
+def _fake_json(url, timeout=20):
+    if "wikidata" in url:
+        b = lambda q, lab, typ, desc="", img=True, lat=54.56, lon=18.39: {
+            "item": {"value": f"http://www.wikidata.org/entity/{q}"}, "itemLabel": {"value": lab},
+            "itemDescription": {"value": desc}, "typeLabel": {"value": typ}, "loc": {"value": f"Point({lon} {lat})"},
+            **({"img": {"value": "http://commons.wikimedia.org/wiki/Special:FilePath/X.jpg"}} if img else {})}
+        return {"results": {"bindings": [b("Q1", "Góra Markowca", "góra"), b("Q2", "Rumia railway station", "stacja kolejowa"),
+                                          b("Q3", "Ruiny kościoła", "ruiny", "church building"), b("Q4", "Q4", "góra"),
+                                          b("Q5", "Some shop", "sklep", img=False)]}}
+    return [{"name": "Szmelta Grand View", "type": "viewpoint", "lat": "54.56", "lon": "18.40", "osm_type": "node", "osm_id": 7},
+            {"name": "", "type": "viewpoint", "lat": "54.56", "lon": "18.40", "osm_type": "node", "osm_id": 8}]
+_orig, _mp._get_json = _mp._get_json, _fake_json
+import time as _t
+_sleep, _t.sleep = _t.sleep, (lambda s: None)
+step("wikidata_places", lambda: sorted((x["title"], x["score"], x["src"], x["img"].startswith("https://")) for x in _mp.wikidata_places(54.57, 18.39, "pl")))
+step("nominatim_places", lambda: [(x["title"], x["score"], x["kind"]) for x in _mp.nominatim_places(54.57, 18.39, "pl")])
+_mp._get_json, _t.sleep = _orig, _sleep
