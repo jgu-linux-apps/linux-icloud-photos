@@ -198,6 +198,8 @@ EN = {
     "Limit pamięci podręcznej (GB)": "Cache size limit (GB)",
     "Zajęte teraz": "Used now",
     "Wyczyść pamięć podręczną": "Clear cache",
+    'Poprzednie zdjęcie (←)': 'Previous photo (←)',
+    'Następne zdjęcie (→)': 'Next photo (→)',
     'Źródła: Wikipedia, Wikidata i OpenStreetMap, w pobliżu środka mapy': 'Sources: Wikipedia, Wikidata and OpenStreetMap, near the map centre',
     'Szukam jeszcze w Wikidata i OpenStreetMap…': 'Still searching Wikidata and OpenStreetMap…',
     'Kafelki': 'Tiles',

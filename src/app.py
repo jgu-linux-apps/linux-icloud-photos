@@ -88,6 +88,8 @@ SLIDE_SECS = (3, 5, 8, 15)
 PRESETS = ((tr('Małe'), 100), (tr('Standardowe'), 180), (tr('Duże'), 260), (tr('Bardzo duże'), 360))
 
 CSS = b"""
+button.nav-arrow { opacity: 0.75; transition: opacity 150ms; }
+button.nav-arrow:hover { opacity: 1; }
 button.albumrow { padding: 6px 12px; border-radius: 12px; }
 button.albumrow .albumcard-pic { border-radius: 10px; }
 entry.album-search { border-radius: 999px; padding: 2px 12px; min-height: 34px;
@@ -667,9 +669,24 @@ class Viewer(Gtk.Window):
                   self.trash_btn, self.info_btn):
             topbar.append(w)
 
+        # poprzednie / następne zdjęcie (strzałki ← → robią to samo)
+        self.prev_btn = Gtk.Button(icon_name="go-previous-symbolic")
+        self.next_btn = Gtk.Button(icon_name="go-next-symbolic")
+        for b, side, tip, step in ((self.prev_btn, Gtk.Align.START, tr("Poprzednie zdjęcie (←)"), -1),
+                                   (self.next_btn, Gtk.Align.END, tr("Następne zdjęcie (→)"), 1)):
+            b.add_css_class("osd")
+            b.add_css_class("circular")
+            b.add_css_class("nav-arrow")
+            b.set_size_request(56, 56)
+            b.set_halign(side)
+            b.set_valign(Gtk.Align.CENTER)
+            b.set_margin_start(16)
+            b.set_margin_end(16)
+            b.set_tooltip_text(tip)
+            b.connect("clicked", lambda _b, st=step: self.show_index(self.index + st))
         ov = Gtk.Overlay()
         ov.set_child(self.stack)
-        for w in (self.caption, self.spinner, topbar, self.play_btn, self.zbar):
+        for w in (self.caption, self.spinner, topbar, self.play_btn, self.zbar, self.prev_btn, self.next_btn):
             ov.add_overlay(w)
         self.set_child(ov)
 
@@ -854,6 +871,9 @@ class Viewer(Gtk.Window):
         obj = self.store.get_item(self.index)
         self._cur_id = obj.asset.id
         self._update_fav_btn()
+        if hasattr(self, "prev_btn"):
+            self.prev_btn.set_visible(self.index > 0)
+            self.next_btn.set_visible(self.index < n - 1 or not self.win.exhausted)
         self.trash_btn.set_visible(not self.win._in_trash())
         self.win.last_obj = obj
         self.live_btn.set_visible(obj.is_live)

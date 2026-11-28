@@ -77,6 +77,8 @@ DE = {
     "Cache size limit (GB)": "Cache-Größenlimit (GB)",
     "Used now": "Aktuell belegt",
     "Clear cache": "Cache leeren",
+    'Previous photo (←)': 'Vorheriges Foto (←)',
+    'Next photo (→)': 'Nächstes Foto (→)',
     'Sources: Wikipedia, Wikidata and OpenStreetMap, near the map centre': 'Quellen: Wikipedia, Wikidata und OpenStreetMap, nahe der Kartenmitte',
     'Still searching Wikidata and OpenStreetMap…': 'Suche noch in Wikidata und OpenStreetMap…',
     'Tiles': 'Kacheln',

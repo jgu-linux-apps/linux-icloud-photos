@@ -77,6 +77,8 @@ UK = {
     "Cache size limit (GB)": "Ліміт розміру кешу (ГБ)",
     "Used now": "Зайнято зараз",
     "Clear cache": "Очистити кеш",
+    'Previous photo (←)': 'Попереднє фото (←)',
+    'Next photo (→)': 'Наступне фото (→)',
     'Sources: Wikipedia, Wikidata and OpenStreetMap, near the map centre': 'Джерела: Вікіпедія, Wikidata та OpenStreetMap, поблизу центру карти',
     'Still searching Wikidata and OpenStreetMap…': 'Ще шукаю в Wikidata та OpenStreetMap…',
     'Tiles': 'Плитки',
